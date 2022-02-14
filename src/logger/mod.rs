@@ -22,6 +22,7 @@ use channel::Channel;
 
 mod consts;
 use consts::*;
+
 use core::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 
 #[defmt::global_logger]
