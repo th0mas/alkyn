@@ -5,8 +5,8 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use defmt::*;
 use defmt::assert;
+use defmt::*;
 use panic_probe as _;
 
 use cortex_m::asm;
@@ -21,6 +21,7 @@ use rp2040_hal as hal;
 mod logger;
 mod processor;
 mod timer;
+mod sync;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
 const CORE1_TASK_COMPLETE: u32 = 0xEE;
@@ -28,7 +29,8 @@ static mut CORE1_STACK: Stack<4096> = Stack::new();
 
 static mut TIMER: Option<hal::Timer> = Option::None;
 
-defmt::timestamp!("{=u32:us}", {
+// Setup logging
+defmt::timestamp!("{=u8}:{=u32:us}", { processor::get_current_core() }, {
     // safety, this is read only
     unsafe {
         match &TIMER {
