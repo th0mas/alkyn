@@ -1,6 +1,7 @@
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use crate::hal;
+use crate::pac;
 
 const SYNC_LOCK: usize = 30;
 
@@ -70,4 +71,36 @@ impl Spinlock {
         lock_index
     }
     }
+
+
+    pub fn try_claim(&self) -> Option<&Self> {
+      let sio = unsafe {&*pac::SIO::ptr()};
+      let lock = sio.spinlock[self.lock as usize]
+        .read().bits();
+
+      if lock > 0 {
+        Some(self)
+      } else {
+        None
+      }
+    }
+
+    pub fn claim(&self) -> &Self {
+      loop {
+        if let Some(result ) = self.try_claim() {
+          break result;
+        }
+      }
+    }
+
+    pub unsafe fn release(&self) {
+      let sio = &*pac::SIO::ptr();
+      sio.spinlock[self.lock as usize].write_with_zero(|b| b.bits(1))
+    }
+}
+
+impl Drop for Spinlock {
+  fn drop(&mut self) {
+    unsafe { self.release() }
+  }
 }
