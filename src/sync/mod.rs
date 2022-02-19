@@ -46,8 +46,8 @@ unsafe fn claim_unused() -> Option<u8> {
 }
 
 unsafe fn unclaim_lock(lock: u8) -> u8 {
-  LOCK_OWNERS[lock as usize] = 0;
-  lock
+    LOCK_OWNERS[lock as usize] = 0;
+    lock
 }
 
 impl Spinlock {
@@ -63,44 +63,44 @@ impl Spinlock {
     }
 
     fn deinit(&self) -> u8 {
-      unsafe {
-        let _sync_lock = hal::sio::Spinlock::<SYNC_LOCK>::claim();
-        let lock_index = unclaim_lock(self.lock);
-        hal::sio::Spinlock::<SYNC_LOCK>::release();
+        unsafe {
+            let _sync_lock = hal::sio::Spinlock::<SYNC_LOCK>::claim();
+            let lock_index = unclaim_lock(self.lock);
+            hal::sio::Spinlock::<SYNC_LOCK>::release();
 
-        lock_index
-    }
-    }
+            unsafe { self.release() }
 
+            lock_index
+        }
+    }
 
     pub fn try_claim(&self) -> Option<&Self> {
-      let sio = unsafe {&*pac::SIO::ptr()};
-      let lock = sio.spinlock[self.lock as usize]
-        .read().bits();
+        let sio = unsafe { &*pac::SIO::ptr() };
+        let lock = sio.spinlock[self.lock as usize].read().bits();
 
-      if lock > 0 {
-        Some(self)
-      } else {
-        None
-      }
+        if lock > 0 {
+            Some(self)
+        } else {
+            None
+        }
     }
 
     pub fn claim(&self) -> &Self {
-      loop {
-        if let Some(result ) = self.try_claim() {
-          break result;
+        loop {
+            if let Some(result) = self.try_claim() {
+                break result;
+            }
         }
-      }
     }
 
     pub unsafe fn release(&self) {
-      let sio = &*pac::SIO::ptr();
-      sio.spinlock[self.lock as usize].write_with_zero(|b| b.bits(1))
+        let sio = &*pac::SIO::ptr();
+        sio.spinlock[self.lock as usize].write_with_zero(|b| b.bits(1))
     }
 }
 
 impl Drop for Spinlock {
-  fn drop(&mut self) {
-    unsafe { self.release() }
-  }
+    fn drop(&mut self) {
+        unsafe { self.release() }
+    }
 }
