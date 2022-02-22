@@ -3,6 +3,8 @@
 //! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
+#![feature(core_intrinsics)]
+#![feature(asm_const)]
 
 use cortex_m_rt::entry;
 use defmt::assert;
@@ -22,6 +24,7 @@ mod logger;
 mod processor;
 mod timer;
 mod sync;
+mod supervisor;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
 const CORE1_TASK_COMPLETE: u32 = 0xEE;
@@ -63,6 +66,8 @@ fn main() -> ! {
     assert!(sio.fifo.read_blocking() == 0, "Core 1 failed");
 
     info!("Booted");
+    info!("Try and call svc");
+    supervisor::raw_svc_call::<2>();
     loop {
         asm::nop();
     }
