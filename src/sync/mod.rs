@@ -32,7 +32,7 @@ const LOCK_ALREADY_OWNED: u8 = 0b1000;
 ///
 /// 0 = no one has the lock, 1 = core0 has the lock, 2 = core1 has the lock
 /// 4 = lock allocated
-static mut LOCK_OWNERS: [u8; 30] = [0; 30];
+static mut LOCK_OWNERS: [u8; 30] = [LOCK_UNOWNED; 30];
 pub struct Spinlock {
     lock: u8,
 }

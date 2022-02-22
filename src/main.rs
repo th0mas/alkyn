@@ -25,6 +25,7 @@ mod processor;
 mod timer;
 mod sync;
 mod supervisor;
+mod thread;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
 const CORE1_TASK_COMPLETE: u32 = 0xEE;

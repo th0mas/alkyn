@@ -1,5 +1,5 @@
 // Abstract out some unsafe assembly 
-use cortex_m::asm;
+use cortex_m::{asm, interrupt};
 use crate::pac;
 
 /// Nice CPU helper functions
@@ -14,6 +14,14 @@ pub fn wait_for_interrrupt() {
 #[inline]
 pub fn wait_for_event() {
     asm::wfe();
+}
+
+pub unsafe fn enable_interrupts() {
+    interrupt::enable();
+}
+
+pub unsafe fn disable_interrupts() {
+    interrupt::disable();
 }
 
 // Get the current core we're executing on.
