@@ -1,13 +1,16 @@
 use core::ptr;
 use cortex_m::peripheral::DWT;
+use rp2040_hal::pac::io_bank0::proc0_inte;
 
 use crate::processor;
 
 mod systick;
 
+use cortex_m_rt::exception::SysTick;
+
 #[repr(C)]
-struct ThreadingState {
-    currrent: usize,
+pub struct ThreadingState {
+    current: usize,
     next: usize,
     inited: bool,
     idx: usize,
@@ -41,7 +44,7 @@ struct ThreadControlBlock {
 #[no_mangle]
 static mut __ALKYN_THREADS_GLOBAL_PTR: u32 = 0;
 static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
-    currrent: 0,
+    current: 0,
     next: 0,
     inited: false,
     idx: 0,
@@ -71,6 +74,35 @@ pub fn get_counter() -> u64 {
     counter
 }
 
+// Safety: read_only
+pub fn get_current_thread_ptr() -> usize {
+    unsafe {
+        processor::disable_interrupts()
+    }
+
+    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let current_thread = handler.current;
+
+    unsafe {
+        processor::enable_interrupts()
+    }
+    current_thread
+}
+
+pub fn get_next_thread_ptr() -> usize {
+    unsafe {
+        processor::disable_interrupts()
+    }
+
+    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let next_thread = handler.next;
+
+    unsafe {
+        processor::enable_interrupts()
+    }
+    next_thread
+}
+
 /// Initialize the switcher system
 pub fn init() -> ! {
     unsafe {
@@ -93,7 +125,7 @@ pub fn init() -> ! {
             _ => defmt::error!("Alkyn: Could not create idle thread!"),
         }
         __ALKYN_THREADS_GLOBAL.inited = true;
-        SysTick();
+        systick::run_systick();
         loop {
             processor::wait_for_event();
         }
@@ -128,7 +160,7 @@ pub fn create_thread_with_config(
                 handler.add_idx = handler.add_idx + 1;
             }
             Err(e) => {
-                enable_threads();
+                critical_section::release(cs);
                 return Err(e);
             }
         }
@@ -136,4 +168,13 @@ pub fn create_thread_with_config(
         critical_section::release(cs);
         Ok(())
     }
+}
+
+pub fn sleep(ticks: u32) {
+    let handler = unsafe {&mut __ALKYN_THREADS_GLOBAL};
+     if handler.idx > 0 {
+        handler.threads[handler.idx].status = ThreadStatus::Sleeping;
+        handler.threads[handler.idx].sleep_ticks = ticks;
+        systick::run_systick();
+     }
 }
