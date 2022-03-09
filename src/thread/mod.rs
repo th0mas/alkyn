@@ -1,12 +1,10 @@
-use core::ptr;
-use cortex_m::peripheral::DWT;
-use rp2040_hal::pac::io_bank0::proc0_inte;
+use cortex_m::peripheral::SYST;
+use defmt::error;
 
 use crate::processor;
 
 mod systick;
 
-use cortex_m_rt::exception::SysTick;
 
 #[repr(C)]
 pub struct ThreadingState {
@@ -104,7 +102,7 @@ pub fn get_next_thread_ptr() -> usize {
 }
 
 /// Initialize the switcher system
-pub fn init() -> ! {
+pub fn init(syst: &mut SYST, ticks: u32) -> ! {
     unsafe {
         let cs = critical_section::acquire();
         let ptr: usize = core::intrinsics::transmute(&__ALKYN_THREADS_GLOBAL);
@@ -125,6 +123,7 @@ pub fn init() -> ! {
             _ => defmt::error!("Alkyn: Could not create idle thread!"),
         }
         __ALKYN_THREADS_GLOBAL.inited = true;
+        systick::enable(syst, ticks);
         systick::run_systick();
         loop {
             processor::wait_for_event();
@@ -177,4 +176,88 @@ pub fn sleep(ticks: u32) {
         handler.threads[handler.idx].sleep_ticks = ticks;
         systick::run_systick();
      }
+}
+
+pub fn get_next_thread_idx() -> usize {
+    let handler = unsafe {&mut __ALKYN_THREADS_GLOBAL};
+
+    if handler.add_idx <= 1 {
+        return 0; // Idle thread
+    }
+
+    for i in 1..handler.add_idx {
+        if handler.threads[i].status == ThreadStatus::Sleeping {
+            if handler.threads[i].sleep_ticks > 0 {
+                handler.threads[i].sleep_ticks = handler.threads[i].sleep_ticks - 1;
+            } else {
+                handler.threads[i].status = ThreadStatus::Idle;
+            }
+        }
+    }
+
+    match handler
+        .threads
+        .iter()
+        .enumerate()
+        .filter(|&(idx, x)| idx > 0 && idx < handler.add_idx && x.status != ThreadStatus::Sleeping)
+        .max_by(|&(_, a), &(_, b)| a.priority.cmp(&b.priority))
+        {
+            Some((idx, _)) => idx,
+            _ => 0
+        }
+}
+
+fn create_tcb(
+    stack: &mut [u32],
+    handler_fn: fn() -> !,
+    priority: u8,
+    priviliged: bool,
+) -> Result<ThreadControlBlock, u8> {
+    if stack.len() < 32 {
+        error!("Stack size too small");
+        return Err(1)
+    }
+
+    let idx = stack.len() - 1;
+    
+    let pc: usize =  unsafe {core::intrinsics::transmute(handler_fn as *const fn())};
+
+    // Init registers
+    stack[idx] = 1 << 24;// xPSR
+    stack[idx - 1] = pc as u32;
+
+    // Fill with dummy vals
+    stack[idx - 2] = 0xFFFFFFFD; // return reg
+    stack[idx - 3] = 0xCCCCCCCC; // R12
+    stack[idx - 4] = 0x33333333; // R3
+    stack[idx - 5] = 0x22222222; // R2
+    stack[idx - 6] = 0x11111111; // R1
+    stack[idx - 7] = 0x00000000; // R0
+                                 // aditional regs
+    stack[idx - 08] = 0x77777777; // R7
+    stack[idx - 09] = 0x66666666; // R6
+    stack[idx - 10] = 0x55555555; // R5
+    stack[idx - 11] = 0x44444444; // R4
+    stack[idx - 12] = 0xBBBBBBBB; // R11
+    stack[idx - 13] = 0xAAAAAAAA; // R10
+    stack[idx - 14] = 0x99999999; // R9
+    stack[idx - 15] = 0x88888888; // R8
+
+    let sp: usize = unsafe {core::intrinsics::transmute(&stack[stack.len() - 16]) };
+
+    let tcb = ThreadControlBlock {
+        sp: sp as u32,
+        priority: priority,
+        privileged: priviliged.into(),
+        status: ThreadStatus::Idle,
+        sleep_ticks: 0
+    };
+    Ok(tcb)
+}
+
+fn insert_tcb(idx: usize, tcb: ThreadControlBlock) {
+    unsafe {
+        let handler = &mut __ALKYN_THREADS_GLOBAL;
+        handler.threads[idx] = tcb;
+    }
 }

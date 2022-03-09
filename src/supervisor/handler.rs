@@ -3,13 +3,13 @@ use core::intrinsics;
 use cortex_m::register;
 use cortex_m_rt::exception;
 
-use crate::thread;
+use crate::{thread, processor};
 
 
 #[exception]
 fn PendSV() {
     unsafe {
-        let cs = critical_section::acquire();
+        processor::disable_interrupts(); // We enable later on
         let current_thread = thread::get_current_thread_ptr();
         let mut psp = register::psp::read() - 16;
         if current_thread != 0 {
@@ -39,13 +39,10 @@ fn PendSV() {
             "ldmia	r3!, {{r4-r7}}",
             "msr psp, r3",
             "ldr r0, =0xFFFFFFFD",
-            "cpsie i",
+            "cpsie i", // Enable interrupts here
             "bx r0",
             in("r1") psp,
             in("r2") next,
         );
-
-
-        critical_section::release(cs)
     }
 }

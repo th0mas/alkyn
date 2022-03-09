@@ -31,7 +31,7 @@ fn systick_handler() {
     handler.prev_cnt = count;
     if handler.current == handler.next {
       // schedule a thread to be run
-      handler.idx = get_next_thread_idx();
+      handler.idx = super::get_next_thread_idx();
       unsafe {
         handler.next = core::intrinsics::transmute(&handler.threads[handler.idx])
       }
@@ -49,7 +49,7 @@ fn systick_handler() {
   unsafe {critical_section::release(cs) }
 }
 
-fn enable(syst: &mut SYST, reload: u32) {
+pub fn enable(syst: &mut SYST, reload: u32) {
   let cs = unsafe {critical_section::acquire()};
 
   // Safety: within critical section
@@ -67,6 +67,8 @@ fn enable(syst: &mut SYST, reload: u32) {
 
   unsafe {critical_section::release(cs)}
 }
+
+
 
 pub fn run_systick() {
   systick_handler()

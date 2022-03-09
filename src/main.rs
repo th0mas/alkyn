@@ -52,6 +52,8 @@ pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 fn main() -> ! {
     info!("Booting Alkyn");
     let mut pac = pac::Peripherals::take().unwrap();
+    let mut m_pac = cortex_m::Peripherals::take().unwrap();
+    
     unsafe {
         TIMER = Some(hal::Timer::new(pac.TIMER, &mut pac.RESETS));
     }
@@ -67,11 +69,8 @@ fn main() -> ! {
     assert!(sio.fifo.read_blocking() == 0, "Core 1 failed");
 
     info!("Booted");
-    info!("Try and call svc");
-    supervisor::raw_svc_call::<2>();
-    loop {
-        asm::nop();
-    }
+    info!("Initing threads");
+    thread::init(&mut m_pac.SYST, 8000);
 }
 
 fn core1_task() -> ! {
