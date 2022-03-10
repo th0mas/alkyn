@@ -70,7 +70,18 @@ fn main() -> ! {
 
     info!("Booted");
     info!("Initing threads");
+    let mut stack1 = [0xDEADBEEF; 512];
+    let _ = thread::create_thread(
+		&mut stack1, 
+		|| {
+			loop {
+				let _ = info!("in task 1 !!");
+				thread::sleep(50); // sleep for 50 ticks
+			}
+		});
+
     thread::init(&mut m_pac.SYST, 8000);
+
 }
 
 fn core1_task() -> ! {

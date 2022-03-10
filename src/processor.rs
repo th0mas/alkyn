@@ -16,10 +16,12 @@ pub fn wait_for_event() {
     asm::wfe();
 }
 
+#[inline]
 pub unsafe fn enable_interrupts() {
     interrupt::enable();
 }
 
+#[inline]
 pub unsafe fn disable_interrupts() {
     interrupt::disable();
 }
