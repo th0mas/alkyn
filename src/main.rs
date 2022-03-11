@@ -82,7 +82,7 @@ fn main() -> ! {
             let mut count: i32 = 0;
 			loop {
 				let _ = info!("in task 1, count: {} !!", count);
-                count+=1;
+                count+=2;
 				thread::sleep(500); // sleep for 50 ticks
 			}
 		});

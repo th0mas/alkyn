@@ -1,21 +1,17 @@
 use core::arch::asm;
-use core::intrinsics;
 use cortex_m::register;
 use cortex_m_rt::exception;
-use defmt::debug;
 
 use crate::{thread, processor};
 
 
 #[exception]
 fn PendSV() {
-    debug!("PendSV handler called");
     unsafe {
-        processor::disable_interrupts(); // We enable later on
+        processor::disable_interrupts(); // We enable later on in asm
         let current_thread = thread::get_current_thread_ptr();
         let mut psp = register::psp::read();
         if current_thread != 0 {
-            debug!("Not on thread 0, doing funky stuff");
             psp = psp -16;
             asm!(
                 "stmia r0!, {{r4-r7}}",
@@ -25,17 +21,16 @@ fn PendSV() {
                 "subs r0, #32",
                 "stmia r0!, {{r4-r7}}",
                 "subs r0, #16", // possibly need another ld here
-                "str r0, [r1, 0x0]",
+                "str r0, [{cur}, 0x0]",
+                cur = in(reg) current_thread,
                 in("r0") psp,
-                in("r1") current_thread,
             );
         }
         let next = thread::get_next_thread_ptr();
         let os = &mut thread::__ALKYN_THREADS_GLOBAL;
         os.set_next_to_curr();
-        debug!("Changing stack");
         asm!(
-            "ldr r3, [r2, 0x0]", // next.sp
+            "ldr r3, [{nxt}, 0x0]", // next.sp
             "ldmia r3!, {{r4-r7}}", // Load stack
             "mov r8, r4", // Move to higher vars
             "mov r9,  r5",
@@ -46,8 +41,7 @@ fn PendSV() {
             "ldr r0, =0xFFFFFFFD", // set to 0
             "cpsie i", // Enable interrupts here
             "bx r0",
-            in("r1") psp,
-            in("r2") next,
+            nxt = in(reg) next,
             options(noreturn)
         );
     }
