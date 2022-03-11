@@ -1,6 +1,7 @@
 use cortex_m::peripheral::SYST;
 use cortex_m_rt::exception;
-use defmt::panic;
+use cortex_m::peripheral::syst::SystClkSource;
+use defmt::{panic, debug};
 use core::ptr;
 
 use super::__ALKYN_THREADS_GLOBAL;
@@ -21,12 +22,12 @@ fn systick_handler() {
   // Safety: We're inside our critical section
   let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL};
 
-  if handler.inited { // TODO: Do the math here with systick
+  if handler.inited { // TODO: Tick counter broken
     let count = SYST::get_current();
     if count > handler.prev_cnt {
       handler.counter = handler.counter + count as u64 + (u32::MAX - handler.prev_cnt) as u64
     } else {
-      handler.counter = handler.counter + (count - handler.prev_cnt) as u64;
+      handler.counter = handler.counter + (handler.prev_cnt - count) as u64;
     }
     handler.prev_cnt = count;
     if handler.current == handler.next {
@@ -55,9 +56,11 @@ pub fn enable(syst: &mut SYST, reload: u32) {
   // Safety: within critical section
   unsafe {
     if !__ALKYN_SYST_ENABLE {
+      syst.set_clock_source(SystClkSource::Core);
       syst.set_reload(reload);
       syst.clear_current();
       syst.enable_counter();
+      syst.enable_interrupt();
       __ALKYN_SYST_ENABLE = true;
     } else {
       panic!("Tried to enable twice")

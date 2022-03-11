@@ -50,6 +50,9 @@ pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 
 #[entry]
 fn main() -> ! {
+    // ffs
+    unsafe {(*pac::SIO::ptr()).spinlock[31].write(|w| w.bits(0));}
+
     info!("Booting Alkyn");
     let mut pac = pac::Peripherals::take().unwrap();
     let mut m_pac = cortex_m::Peripherals::take().unwrap();
@@ -71,16 +74,29 @@ fn main() -> ! {
     info!("Booted");
     info!("Initing threads");
     let mut stack1 = [0xDEADBEEF; 512];
+    let mut stack2 = [0xDEADBEEF; 512];
     let _ = thread::create_thread(
 		&mut stack1, 
 		|| {
+            info!("Starting task 1!");
+            let mut count: i32 = 0;
 			loop {
-				let _ = info!("in task 1 !!");
-				thread::sleep(50); // sleep for 50 ticks
+				let _ = info!("in task 1, count: {} !!", count);
+                count+=1;
+				thread::sleep(500); // sleep for 50 ticks
 			}
 		});
+        let _ = thread::create_thread(
+            &mut stack2, 
+            || {
+                info!("Starting task 2!");
+                loop {
+                    let _ = info!("in task 2 !!");
+                    thread::sleep(100); // sleep for 10 ticks
+                }
+            });
 
-    thread::init(&mut m_pac.SYST, 8000);
+    thread::init(&mut m_pac.SYST, 80_000); // 100hz
 
 }
 

@@ -1,4 +1,4 @@
-use cortex_m::peripheral::SYST;
+use cortex_m::{peripheral::SYST, asm};
 use defmt::error;
 
 use crate::processor;
@@ -41,7 +41,7 @@ struct ThreadControlBlock {
 
 #[no_mangle]
 static mut __ALKYN_THREADS_GLOBAL_PTR: u32 = 0;
-static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
+pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
     current: 0,
     next: 0,
     inited: false,
@@ -57,6 +57,12 @@ static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
     counter: 0,
     prev_cnt: 0,
 };
+
+impl ThreadingState {
+    pub fn set_next_to_curr(&mut self) {
+        self.current = self.next;
+    }
+}
 
 pub fn get_counter() -> u64 {
     unsafe {
