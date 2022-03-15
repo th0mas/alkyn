@@ -12,7 +12,7 @@ fn PendSV() {
         let current_thread = thread::get_current_thread_ptr();
         let mut psp = register::psp::read();
         if current_thread != 0 {
-            psp = psp -16;
+            psp = psp - 16;
             asm!(
                 "stmia r0!, {{r4-r7}}",
                 "mov r4, r8",

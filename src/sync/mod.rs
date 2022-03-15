@@ -1,7 +1,7 @@
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use crate::hal;
-use crate::pac;
+use crate::{pac, processor};
 
 const SYNC_LOCK: usize = 30;
 
@@ -52,7 +52,7 @@ unsafe fn unclaim_lock(lock: u8) -> u8 {
 
 impl Spinlock {
     #[inline]
-    fn new() -> Option<Self> {
+    pub fn new() -> Option<Self> {
         unsafe {
             let _sync_lock = hal::sio::Spinlock::<SYNC_LOCK>::claim();
             let lock_index = claim_unused();
@@ -96,6 +96,17 @@ impl Spinlock {
     pub unsafe fn release(&self) {
         let sio = &*pac::SIO::ptr();
         sio.spinlock[self.lock as usize].write_with_zero(|b| b.bits(1))
+    }
+
+    pub fn critical_section<F, R>(&self, f:F) -> R
+    where F: Fn() -> R {
+        unsafe {processor::disable_interrupts() };
+        // Ensure the compiler doesn't re-order accesses and violate safety here
+        core::sync::atomic::compiler_fence(Ordering::SeqCst);
+        self.claim();
+        let r = f();
+        unsafe {self.release(); processor::enable_interrupts();};
+        r
     }
 }
 
