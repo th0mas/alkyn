@@ -111,10 +111,6 @@ pub fn get_next_thread_ptr() -> usize {
 /// Initialize the switcher system
 pub fn init(syst: &mut SYST, ticks: u32) -> ! {
     crate::multi::init_cores();
-    core_init();
-}
-
-pub fn core_init() -> ! {
     unsafe {
         let cs = critical_section::acquire();
         let ptr: usize = core::intrinsics::transmute(&__ALKYN_THREADS_GLOBAL);
@@ -134,6 +130,9 @@ pub fn core_init() -> ! {
             }
             _ => defmt::error!("Alkyn: Could not create idle thread!"),
         };
+        __ALKYN_THREADS_GLOBAL.inited = true;
+        systick::enable(syst, ticks);
+        systick::run_systick();
         loop {
             processor::wait_for_event();
         }

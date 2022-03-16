@@ -2,6 +2,7 @@
 //! Based off cortex-m-alloc, adapted to use rp2040 spinlocks
 
 use core::alloc::{GlobalAlloc, Layout};
+use core::borrow::BorrowMut;
 use core::cell::RefCell;
 use core::ptr::{self, NonNull};
 use linked_list_allocator::Heap;
@@ -49,8 +50,37 @@ impl AlkynHeap {
     /// - This function must be called exactly ONCE.
     /// - `size > 0`
     pub unsafe fn init(&self, start_addr: usize, size: usize) {
-      self.lock.critical_section(|| {
-        self.init(start_addr, size)
-      })
-  }
+        self.lock
+            .critical_section(|| self.heap.borrow_mut().init(start_addr, size))
+    }
+
+    /// Returns an estimate of the amount of bytes in use.
+    pub fn used(&self) -> usize {
+        self.lock.critical_section(|| self.heap.borrow_mut().used())
+    }
+
+    /// Returns an estimate of the amount of bytes available.
+    pub fn free(&self) -> usize {
+        self.lock.critical_section(|| self.heap.borrow_mut().free())
+    }
+}
+
+unsafe impl GlobalAlloc for AlkynHeap {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        self.lock.critical_section(|| {
+            self.heap
+                .borrow_mut()
+                .allocate_first_fit(layout)
+                .ok()
+                .map_or(ptr::null_mut(), |allocation| allocation.as_ptr())
+        })
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.lock.critical_section(|| {
+            self.heap
+                .borrow_mut()
+                .deallocate(NonNull::new_unchecked(ptr), layout)
+        });
+    }
 }

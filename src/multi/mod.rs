@@ -3,19 +3,22 @@ use defmt::info;
 use hal::multicore::{Multicore, Stack};
 use hal::{pac, Sio};
 use rp2040_hal as hal;
+use hal::pac::{interrupt, Interrupt, NVIC};
+use core::ptr;
 
 mod msg;
 mod alloc;
 
 use crate::processor;
 
-static mut CORE1_STACK: Stack<4096> = Stack::new();
+// const NVIC_ICER: u32 = 0xe180;
 
+static mut CORE1_STACK: Stack<4096> = Stack::new();
 static mut CORE1_INIT: atomic::AtomicBool = atomic::AtomicBool::new(false);
 
 pub fn init_cores() {
     // Initialize message heap
-    
+
     // Safety: We only use the required fields in this mod
     let mut pac = unsafe { pac::Peripherals::steal() };
     let mut sio = Sio::new(pac.SIO);
@@ -23,22 +26,26 @@ pub fn init_cores() {
 
     let cores = mc.cores();
     let core1 = &mut cores[1];
-    let _ = core1.spawn(core_loop, unsafe { &mut CORE1_STACK.mem });
+    let _ = core1.spawn(core_boot, unsafe { &mut CORE1_STACK.mem });
     unsafe { CORE1_INIT.store(true, atomic::Ordering::Release) }
+    sio.fifo.write_blocking(1);
 }
 
 // Boot scheduler on each core
-fn core_loop() -> ! {
+fn core_boot() -> ! {
     info!("Core 1 online");
-    let pac = unsafe { pac::Peripherals::steal() };
+    unsafe {NVIC::unmask(Interrupt::SIO_IRQ_PROC1);}
 
-    let mut sio = Sio::new(pac.SIO);
-    loop {
-        processor::wait_for_event();
-        let m = sio.fifo.read_blocking();
+    loop {}
+   
+}
 
-        // Safety: lmao
-        let m: &msg::ICCMessage  = unsafe {core::intrinsics::transmute(m)};
-        defmt::info!("{}", m);
-    }
+#[interrupt]
+fn SIO_IRQ_PROC1() {
+  let pac = unsafe { pac::Peripherals::steal() };
+  let mut sio = Sio::new(pac.SIO);
+
+  let msg = sio.fifo.read_blocking();
+  defmt::debug!("message: {}", msg);
+  sio.fifo.write(1);
 }
