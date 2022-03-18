@@ -26,6 +26,19 @@ enum ThreadStatus {
     Sleeping,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AllocatedCore {
+    Core0,
+    Core1,
+    NoCore
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CoreAffinity {
+    Pinned,
+    None
+}
+
 /// A single thread's state
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -38,6 +51,8 @@ struct ThreadControlBlock {
     priority: u8,
     status: ThreadStatus,
     sleep_ticks: u32,
+    core: AllocatedCore,
+    affinity: CoreAffinity
 }
 
 #[no_mangle]
@@ -54,6 +69,8 @@ pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
         priority: 0,
         privileged: 0,
         sleep_ticks: 0,
+        core: AllocatedCore::Core1,
+        affinity: CoreAffinity::Pinned
     }; 32],
     counter: 0,
     prev_cnt: 0,

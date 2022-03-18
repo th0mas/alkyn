@@ -37,7 +37,6 @@ fn core_boot() -> ! {
     unsafe {NVIC::unmask(Interrupt::SIO_IRQ_PROC1);}
 
     loop {}
-   
 }
 
 #[interrupt]
@@ -46,6 +45,7 @@ fn SIO_IRQ_PROC1() {
   let mut sio = Sio::new(pac.SIO);
 
   let msg = sio.fifo.read_blocking();
-  defmt::debug!("message: {}", msg);
+  let msg_decode: &msg::ICCMessage = unsafe {core::intrinsics::transmute(msg)};
+  defmt::debug!("message: {}", msg_decode);
   sio.fifo.write(1);
 }

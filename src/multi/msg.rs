@@ -1,5 +1,7 @@
 use defmt::Format;
 
+use crate::processor;
+
 #[derive(Format)]
 pub struct ThreadControlBlock{
   sp: u32,
@@ -21,7 +23,8 @@ pub enum ICCMessage{
 }
 
 impl ICCMessage {
-  pub fn send(self, idx: usize, core: u32) {
-    
+  pub fn send(self, idx: usize) {
+    let core = processor::get_current_core();
+
   }
 }
