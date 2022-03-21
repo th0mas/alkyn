@@ -6,6 +6,7 @@
 #![feature(core_intrinsics)]
 #![feature(asm_const)]
 #![feature(const_option)]
+#![feature(generic_const_exprs)]
 
 use cortex_m_rt::entry;
 use defmt::*;

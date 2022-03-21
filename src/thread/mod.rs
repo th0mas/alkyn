@@ -23,20 +23,21 @@ pub struct ThreadingState {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ThreadStatus {
     Idle,
-    Sleeping,
+    Sleeping
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum AllocatedCore {
+enum Core {
     Core0,
     Core1,
-    NoCore
+    None
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum CoreAffinity {
-    Pinned,
-    None
+impl Core {
+    fn from_slice<const N: usize>(pattern: &[u8; N])
+    where [(); N + 1]: Sized {
+        let converted = [Core::None; N + 1];
+    }
 }
 
 /// A single thread's state
@@ -51,8 +52,8 @@ struct ThreadControlBlock {
     priority: u8,
     status: ThreadStatus,
     sleep_ticks: u32,
-    core: AllocatedCore,
-    affinity: CoreAffinity
+    core: Core,
+    affinity: Core
 }
 
 #[no_mangle]
@@ -69,8 +70,8 @@ pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
         priority: 0,
         privileged: 0,
         sleep_ticks: 0,
-        core: AllocatedCore::Core1,
-        affinity: CoreAffinity::Pinned
+        core: Core::None,
+        affinity: Core::Core0
     }; 32],
     counter: 0,
     prev_cnt: 0,
@@ -275,7 +276,9 @@ fn create_tcb(
         priority: priority,
         privileged: priviliged.into(),
         status: ThreadStatus::Idle,
-        sleep_ticks: 0
+        sleep_ticks: 0,
+        core: Core::None,
+        affinity: Core::None
     };
     Ok(tcb)
 }
