@@ -34,10 +34,24 @@ enum Core {
 }
 
 impl Core {
-    fn from_slice<const N: usize>(pattern: &[u8; N])
+    pub fn from_slice<const N: usize>(pattern: &[u8; N]) -> [Core; N + 1]
     where [(); N + 1]: Sized {
-        let converted = [Core::None; N + 1];
+        let mut converted = [Core::None; N + 1];
+        for (i, c) in pattern.into_iter().enumerate() {
+            converted[i] = match c {
+                0 => Core::Core0,
+                1 => Core::Core1,
+                _ => defmt::panic!("thr: Could not find core {}", c)
+            }
+        }
+        converted
     }
+
+    pub fn get_allowed() -> [Core; 2] {
+        let current_core = processor::get_current_core();
+        Core::from_slice(&[current_core])
+    }
+
 }
 
 /// A single thread's state
@@ -225,6 +239,7 @@ pub fn get_next_thread_idx() -> usize {
         .threads
         .iter()
         .enumerate()
+        .filter(|&(_, x)| Core::get_allowed().contains(&x.affinity))
         .filter(|&(idx, x)| idx > 0 && idx < handler.add_idx && x.status != ThreadStatus::Sleeping)
         .max_by(|&(_, a), &(_, b)| a.priority.cmp(&b.priority))
         {
