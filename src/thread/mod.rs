@@ -67,7 +67,7 @@ struct ThreadControlBlock {
     status: ThreadStatus,
     sleep_ticks: u32,
     core: Core,
-    affinity: Core
+    affinity: Core,
 }
 
 #[no_mangle]
@@ -218,13 +218,9 @@ pub fn sleep(ticks: u32) {
      }
 }
 
-pub fn get_next_thread_idx() -> usize {
+pub fn run_tick() {
+    let cs = unsafe{critical_section::acquire()};
     let handler = unsafe {&mut __ALKYN_THREADS_GLOBAL};
-
-    if handler.add_idx <= 1 {
-        return 0; // Idle thread
-    }
-
     for i in 1..handler.add_idx {
         if handler.threads[i].status == ThreadStatus::Sleeping {
             if handler.threads[i].sleep_ticks > 0 {
@@ -234,6 +230,14 @@ pub fn get_next_thread_idx() -> usize {
             }
         }
     }
+
+    unsafe {critical_section::release(cs)};
+}
+
+pub fn get_next_thread_idx() -> usize {
+    // Safety:  Read only
+    
+    let handler = unsafe {&mut __ALKYN_THREADS_GLOBAL};
 
     match handler
         .threads

@@ -7,11 +7,11 @@ use core::cell::RefCell;
 use core::ptr::{self, NonNull};
 use linked_list_allocator::Heap;
 
-use crate::sync::{self, Spinlock};
+use crate::sync::{self, Spinlock, Mutex};
 
 pub struct AlkynHeap {
-    heap: RefCell<Heap>,
-    lock: sync::Spinlock,
+    heap: Mutex<RefCell<Heap>>,
+    lock: Spinlock,
 }
 
 impl AlkynHeap {
@@ -21,7 +21,7 @@ impl AlkynHeap {
     /// [`init`](struct.CortexMHeap.html#method.init) method before using the allocator.
     pub fn empty() -> AlkynHeap {
         AlkynHeap {
-            heap: RefCell::new(Heap::empty()),
+            heap: Mutex::new(RefCell::new(Heap::empty())),
             lock: Spinlock::new().unwrap(),
         }
     }
@@ -51,24 +51,26 @@ impl AlkynHeap {
     /// - `size > 0`
     pub unsafe fn init(&self, start_addr: usize, size: usize) {
         self.lock
-            .critical_section(|| self.heap.borrow_mut().init(start_addr, size))
+            .critical_section(|t| self.heap.borrow(t).borrow_mut().init(start_addr, size))
+
     }
 
     /// Returns an estimate of the amount of bytes in use.
     pub fn used(&self) -> usize {
-        self.lock.critical_section(|| self.heap.borrow_mut().used())
+        self.lock.critical_section(|t| self.heap.borrow(t).borrow_mut().used())
     }
 
     /// Returns an estimate of the amount of bytes available.
     pub fn free(&self) -> usize {
-        self.lock.critical_section(|| self.heap.borrow_mut().free())
+        self.lock.critical_section(|t| self.heap.borrow(t).borrow_mut().free())
     }
 }
 
 unsafe impl GlobalAlloc for AlkynHeap {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.lock.critical_section(|| {
+        self.lock.critical_section(|t| {
             self.heap
+            .borrow(t)
                 .borrow_mut()
                 .allocate_first_fit(layout)
                 .ok()
@@ -77,8 +79,9 @@ unsafe impl GlobalAlloc for AlkynHeap {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.lock.critical_section(|| {
+        self.lock.critical_section(|t| {
             self.heap
+            .borrow(t)
                 .borrow_mut()
                 .deallocate(NonNull::new_unchecked(ptr), layout)
         });

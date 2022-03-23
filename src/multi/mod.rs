@@ -45,7 +45,10 @@ fn SIO_IRQ_PROC1() {
   let mut sio = Sio::new(pac.SIO);
 
   let msg = sio.fifo.read_blocking();
-  let msg_decode: &msg::ICCMessage = unsafe {core::intrinsics::transmute(msg)};
-  defmt::debug!("message: {}", msg_decode);
+  match msg {
+    1 => defmt::info!("Recvd 1"),
+    _ => defmt::error!("Unknown msg")
+  }
+  
   sio.fifo.write(1);
 }

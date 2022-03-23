@@ -3,6 +3,11 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use crate::hal;
 use crate::{pac, processor};
 
+mod mutex;
+pub use mutex::Mutex;
+
+pub struct LockToken(u8);
+
 const SYNC_LOCK: usize = 30;
 
 // Module for multi-core sync
@@ -34,19 +39,19 @@ const LOCK_ALREADY_OWNED: u8 = 0b1000;
 /// 4 = lock allocated
 static mut LOCK_OWNERS: [u8; 30] = [LOCK_UNOWNED; 30];
 pub struct Spinlock {
-    lock: u8,
+    lock: LockToken,
 }
 
 // Safety: This should be run within a critical section
-unsafe fn claim_unused() -> Option<u8> {
+unsafe fn claim_unused() -> Option<LockToken> {
     LOCK_OWNERS.iter().position(|&x| x == 0).and_then(|x| {
         LOCK_OWNERS[x] = LOCK_ALLOC;
-        Some(x as u8)
+        Some(LockToken(x as u8))
     })
 }
 
-unsafe fn unclaim_lock(lock: u8) -> u8 {
-    LOCK_OWNERS[lock as usize] = 0;
+unsafe fn unclaim_lock(lock: LockToken) -> LockToken {
+    LOCK_OWNERS[lock.0 as usize] = 0;
     lock
 }
 
@@ -62,7 +67,7 @@ impl Spinlock {
         }
     }
 
-    fn deinit(&self) -> u8 {
+    fn deinit(&self) -> LockToken {
         unsafe {
             let _sync_lock = hal::sio::Spinlock::<SYNC_LOCK>::claim();
             let lock_index = unclaim_lock(self.lock);
@@ -76,7 +81,7 @@ impl Spinlock {
 
     pub fn try_claim(&self) -> Option<&Self> {
         let sio = unsafe { &*pac::SIO::ptr() };
-        let lock = sio.spinlock[self.lock as usize].read().bits();
+        let lock = sio.spinlock[self.lock.0 as usize].read().bits();
 
         if lock > 0 {
             Some(self)
@@ -95,16 +100,17 @@ impl Spinlock {
 
     pub unsafe fn release(&self) {
         let sio = &*pac::SIO::ptr();
-        sio.spinlock[self.lock as usize].write_with_zero(|b| b.bits(1))
+        sio.spinlock[self.lock.0 as usize].write_with_zero(|b| b.bits(1))
     }
 
     pub fn critical_section<F, R>(&self, f:F) -> R
-    where F: Fn() -> R {
+    where F: Fn(&LockToken) -> R {
         unsafe {processor::disable_interrupts() };
         // Ensure the compiler doesn't re-order accesses and violate safety here
         core::sync::atomic::compiler_fence(Ordering::SeqCst);
         self.claim();
-        let r = f();
+        let token = self.lock;
+        let r = f(&token);
         unsafe {self.release(); processor::enable_interrupts();};
         r
     }

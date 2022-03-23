@@ -7,9 +7,11 @@
 #![feature(asm_const)]
 #![feature(const_option)]
 #![feature(generic_const_exprs)]
+#![feature(default_alloc_error_handler)]
 
 use cortex_m_rt::entry;
 use defmt::*;
+use heap::AlkynHeap;
 use panic_probe as _;
 
 
@@ -28,6 +30,8 @@ mod multi;
 mod heap;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
+#[global_allocator]
+static ALLOCATOR: AlkynHeap = AlkynHeap::empty();
 
 static mut TIMER: Option<hal::Timer> = Option::None;
 
@@ -65,7 +69,7 @@ fn main() -> ! {
     let mut stack2 = [0xDEADBEEF; 512];
     let _ = thread::create_thread(
 		&mut stack1, 
-		|| {
+		move || {
             info!("Starting task 1!");
             let mut count: i32 = 0;
 			loop {
@@ -76,7 +80,7 @@ fn main() -> ! {
 		});
         let _ = thread::create_thread(
             &mut stack2, 
-            || {
+            move || {
                 info!("Starting task 2!");
                 loop {
                     let _ = info!("in task 2 !!");

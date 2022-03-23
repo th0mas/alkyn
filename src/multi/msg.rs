@@ -1,30 +1,23 @@
+extern crate alloc;
+
+use alloc::boxed::Box;
 use defmt::Format;
 
 use crate::processor;
 
 #[derive(Format)]
-pub struct ThreadControlBlock{
-  sp: u32,
-  priviledged: u32,
-  idx: usize
-}
-
-#[derive(Format)]
-pub struct ThreadMail<T: Format> {
+pub struct ICCMessage<T: Format> {
   idx: usize,
   m: T
 }
 
-#[repr(C)]
-#[derive(Format)]
-pub enum ICCMessage{
-  ThreadControlBlock,
-  ThreadMail
-}
-
-impl ICCMessage {
+impl<T: Format> ICCMessage<T> {
   pub fn send(self, idx: usize) {
     let core = processor::get_current_core();
-
+    let msg = Box::new(self);
   }
+}
+
+pub fn send<T: Format>(idx: usize, m: &T) {
+  
 }

@@ -32,6 +32,7 @@ fn systick_handler() {
     handler.prev_cnt = count;
     if handler.current == handler.next {
       // schedule a thread to be run
+      super::run_tick();
       handler.idx = super::get_next_thread_idx();
       unsafe {
         handler.next = core::intrinsics::transmute(&handler.threads[handler.idx])
@@ -40,7 +41,7 @@ fn systick_handler() {
     if handler.current != handler.next {
       unsafe {
         let pend = ptr::read_volatile(ICSR as *const u32);
-
+        critical_section::release(cs);
         // Set PendSV bit to pending
         ptr::write_volatile(ICSR as *mut u32, pend | 1 << 28);
       }
