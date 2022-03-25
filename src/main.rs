@@ -30,8 +30,12 @@ mod multi;
 mod heap;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
+// Setup allocator
+use core::mem::MaybeUninit;
+const HEAP_SIZE: usize = 1024;
+
 #[global_allocator]
-static ALLOCATOR: AlkynHeap = AlkynHeap::empty();
+static mut ALLOCATOR: AlkynHeap = AlkynHeap::empty();
 
 static mut TIMER: Option<hal::Timer> = Option::None;
 
@@ -54,8 +58,12 @@ pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 fn main() -> ! {
     // ffs
     unsafe {(*pac::SIO::ptr()).spinlock[31].write(|w| w.bits(0));}
-
     info!("Booting Alkyn");
+    info!("Alloc'ing heap");
+    static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+    unsafe { ALLOCATOR.init((&mut HEAP).as_ptr() as usize, HEAP_SIZE) }
+
+    
     let mut pac = pac::Peripherals::take().unwrap();
     let mut m_pac = cortex_m::Peripherals::take().unwrap();
     

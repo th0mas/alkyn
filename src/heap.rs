@@ -19,10 +19,10 @@ impl AlkynHeap {
     ///
     /// You must initialize this heap using the
     /// [`init`](struct.CortexMHeap.html#method.init) method before using the allocator.
-    pub fn empty() -> AlkynHeap {
+    pub const fn empty() -> AlkynHeap {
         AlkynHeap {
             heap: Mutex::new(RefCell::new(Heap::empty())),
-            lock: Spinlock::new().unwrap(),
+            lock: Spinlock::empty(),
         }
     }
 
@@ -49,9 +49,12 @@ impl AlkynHeap {
     ///
     /// - This function must be called exactly ONCE.
     /// - `size > 0`
-    pub unsafe fn init(&self, start_addr: usize, size: usize) {
+    pub unsafe fn init(&mut self, start_addr: usize, size: usize) {
+        self.lock = Spinlock::new().unwrap();
         self.lock
-            .critical_section(|t| self.heap.borrow(t).borrow_mut().init(start_addr, size))
+            .critical_section(|t| {
+                self.heap.borrow(t).borrow_mut().init(start_addr, size);
+            })
 
     }
 

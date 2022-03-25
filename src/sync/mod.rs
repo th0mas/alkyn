@@ -4,8 +4,10 @@ use crate::hal;
 use crate::{pac, processor};
 
 mod mutex;
+use defmt::Format;
 pub use mutex::Mutex;
 
+#[derive(Clone, Copy, Debug, Format)]
 pub struct LockToken(u8);
 
 const SYNC_LOCK: usize = 30;
@@ -67,6 +69,12 @@ impl Spinlock {
         }
     }
 
+    pub const fn empty() -> Self {
+        Self {
+            lock: LockToken(30)
+        }
+    }
+
     fn deinit(&self) -> LockToken {
         unsafe {
             let _sync_lock = hal::sio::Spinlock::<SYNC_LOCK>::claim();
@@ -104,13 +112,12 @@ impl Spinlock {
     }
 
     pub fn critical_section<F, R>(&self, f:F) -> R
-    where F: Fn(&LockToken) -> R {
+    where F: FnOnce(&LockToken) -> R {
         unsafe {processor::disable_interrupts() };
         // Ensure the compiler doesn't re-order accesses and violate safety here
         core::sync::atomic::compiler_fence(Ordering::SeqCst);
         self.claim();
-        let token = self.lock;
-        let r = f(&token);
+        let r = f(&LockToken(1));
         unsafe {self.release(); processor::enable_interrupts();};
         r
     }
