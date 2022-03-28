@@ -29,7 +29,7 @@ pub struct ThreadingState {
 enum ThreadStatus {
     Idle,
     Sleeping,
-    MailPending,
+    MailPending, // 
     MailRecv
 }
 
