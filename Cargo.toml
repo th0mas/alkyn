@@ -28,6 +28,11 @@ defmt-rtt = "0.3.0"
 panic-probe = { version = "0.3.0", features = ["print-defmt"] }
 critical-section = { version = "0.2.4", features = ["custom-impl"] }
 
+[dependencies.crossbeam]
+default-features = false
+version = "0.8"
+features = ["alloc"]
+
 [dependencies.linked_list_allocator]
 default-features = false
 version = "0.8.11"

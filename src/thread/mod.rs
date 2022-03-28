@@ -1,10 +1,15 @@
 use cortex_m::{peripheral::SYST, asm};
 use defmt::error;
 
+extern crate alloc;
+use alloc::vec::{self, Vec};
+
 use crate::processor;
-use crate::multi;
+mod msg;
 
 mod systick;
+
+const MAX_THREADS: usize = 32;
 
 
 #[repr(C)]
@@ -14,7 +19,7 @@ pub struct ThreadingState {
     inited: bool,
     idx: usize,
     add_idx: usize,
-    threads: [ThreadControlBlock; 32],
+    threads: [ThreadControlBlock; MAX_THREADS],
     counter: u64,
     prev_cnt: u32,
 }
@@ -23,7 +28,9 @@ pub struct ThreadingState {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ThreadStatus {
     Idle,
-    Sleeping
+    Sleeping,
+    MailPending,
+    MailRecv
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -85,7 +92,7 @@ pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
         privileged: 0,
         sleep_ticks: 0,
         core: Core::None,
-        affinity: Core::Core0
+        affinity: Core::Core0,
     }; 32],
     counter: 0,
     prev_cnt: 0,
@@ -297,7 +304,7 @@ fn create_tcb(
         status: ThreadStatus::Idle,
         sleep_ticks: 0,
         core: Core::None,
-        affinity: Core::None
+        affinity: Core::None,
     };
     Ok(tcb)
 }

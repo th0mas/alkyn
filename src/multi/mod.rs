@@ -6,7 +6,6 @@ use rp2040_hal as hal;
 use hal::pac::{interrupt, Interrupt, NVIC};
 use core::ptr;
 
-mod msg;
 mod alloc;
 
 use crate::processor;

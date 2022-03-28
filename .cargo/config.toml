@@ -21,7 +21,6 @@ rustflags = [
 
 [build]
 target = "thumbv6m-none-eabi"
-features = "thumb2"
 
 [env]
 DEFMT_LOG = "debug"
