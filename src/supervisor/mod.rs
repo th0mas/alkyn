@@ -1,46 +1,51 @@
-// Includes code written by valff in the DroneOS project
-// Used under the MIT licence.
-mod handler;
-use core::{arch::asm, intrinsics::size_of};
+use core::arch::asm;
+use cortex_m::register;
+use cortex_m_rt::exception;
 
-pub trait Supervisor: Sized + 'static {
-    // `SVC_CALL` exception handler for the supervisor
-    unsafe extern "C" fn handler();
-}
+use crate::{thread, processor};
 
-pub trait SvCall<T: SvService>: Supervisor {
 
-    unsafe fn call(service: &mut T);
-}
-
-pub trait SvService: Sized + Send + 'static {
-    unsafe extern "C" fn handler(&mut self);
-}
-
-#[inline(always)]
-pub unsafe fn sv_call<T: SvService, const NUM: u8>(service: &mut T) {
-    #[cfg(feature = "std")]
-    return unimplemented!();
-    #[cfg(not(feature = "std"))]
+#[exception]
+fn PendSV() {
     unsafe {
-        if size_of::<T>() == 0 {
+        processor::disable_interrupts(); // We enable later on in asm
+        let current_thread = thread::get_current_thread_ptr();
+        let mut psp = register::psp::read();
+        defmt::trace!("curr thr: {:#x}", current_thread);
+        if current_thread != 0 {
+            psp = psp - 16;
             asm!(
-                "svc {}",
-                const NUM,
-                options(nomem, preserves_flags),
-            );
-        } else {
-            asm!(
-                "svc {}",
-                const NUM,
-                options(nomem, preserves_flags),
+                "stmia r0!, {{r4-r7}}",
+                "mov r4, r8",
+                "mov r5, r9",
+                "mov r7, r11",
+                "subs r0, #32",
+                "stmia r0!, {{r4-r7}}",
+                "subs r0, #16", // possibly need another ld here
+                "str r0, [{cur}, 0x0]",
+                cur = in(reg) current_thread,
+                in("r0") psp,
             );
         }
-    }
-}
-
-pub fn raw_svc_call<const NUM: u8>() {
-    unsafe {
-        asm!("svc {imm}", imm = const NUM);
+        let next = thread::get_next_thread_ptr();
+        defmt::trace!("nxt thr: {:#x}", next);
+        let os = &mut thread::__ALKYN_THREADS_GLOBAL;
+        os.set_next_to_curr();
+        defmt::trace!("switching ctx");
+        asm!(
+            "ldr r3, [{nxt}, 0x0]", // next.sp
+            "ldmia r3!, {{r4-r7}}", // Load stack
+            "mov r8, r4", // Move to higher vars
+            "mov r9,  r5",
+            "mov r10, r6",
+            "mov r11, r7",
+            "ldmia	r3!, {{r4-r7}}", // Load rest of stack
+            "msr psp, r3", // Set stack pointer
+            "ldr r0, =0xFFFFFFFD", // set to 0
+            "cpsie i", // Enable interrupts here
+            "bx r0",
+            nxt = in(reg) next,
+            options(noreturn)
+        );
     }
 }

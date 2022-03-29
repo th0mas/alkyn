@@ -17,8 +17,9 @@ use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
-use hal::pac;
+use hal::{pac};
 use rp2040_hal as hal;
+use thread::Core;
 
 mod logger;
 mod processor;
