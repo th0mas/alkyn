@@ -10,6 +10,11 @@ mod alloc;
 
 use crate::processor;
 
+#[repr(u32)]
+enum MessageType {
+  PendSv
+}
+
 // const NVIC_ICER: u32 = 0xe180;
 
 static mut CORE1_STACK: Stack<4096> = Stack::new();
@@ -43,9 +48,11 @@ fn SIO_IRQ_PROC1() {
   let pac = unsafe { pac::Peripherals::steal() };
   let mut sio = Sio::new(pac.SIO);
 
-  let msg = sio.fifo.read_blocking();
+  // Safety: We know u32 is the enum type
+  let msg: MessageType = unsafe {core::mem::transmute((sio.fifo.read_blocking())) };
+
   match msg {
-    1 => defmt::info!("Recvd 1"),
+    MessageType::PendSv => defmt::info!("Recvd PendSv"),
     _ => defmt::error!("Unknown msg")
   }
   
