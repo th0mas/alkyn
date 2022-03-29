@@ -52,7 +52,9 @@ fn SIO_IRQ_PROC1() {
   let msg: MessageType = unsafe {core::mem::transmute((sio.fifo.read_blocking())) };
 
   match msg {
-    MessageType::PendSv => defmt::info!("Recvd PendSv"),
+    MessageType::PendSv =>{
+       defmt::info!("Recvd PendSv")
+      },
     _ => defmt::error!("Unknown msg")
   }
   

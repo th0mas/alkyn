@@ -10,18 +10,23 @@ mod msg;
 mod systick;
 
 const MAX_THREADS: usize = 32;
-
+const CORES: usize = 2;
 
 #[repr(C)]
 pub struct ThreadingState {
-    current: usize,
-    next: usize,
+    cores: [CoreState; CORES],
     inited: bool,
     idx: usize,
     add_idx: usize,
     threads: [ThreadControlBlock; MAX_THREADS],
     counter: u64,
     prev_cnt: u32,
+}
+
+#[repr(C)]
+pub struct CoreState {
+    current: usize,
+    next: usize,
 }
 
 #[repr(C)]
@@ -80,8 +85,10 @@ struct ThreadControlBlock {
 #[no_mangle]
 static mut __ALKYN_THREADS_GLOBAL_PTR: u32 = 0;
 pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
-    current: 0,
-    next: 0,
+    cores: [CoreState {
+        current: 0,
+        next: 0,
+    }; CORES],
     inited: false,
     idx: 0,
     add_idx: 1,
@@ -100,7 +107,8 @@ pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
 
 impl ThreadingState {
     pub fn set_next_to_curr(&mut self) {
-        self.current = self.next;
+        let core: usize = processor::get_current_core().into();
+        self.cores[core].current = self.cores[core].next;
     }
 }
 
@@ -123,9 +131,10 @@ pub fn get_current_thread_ptr() -> usize {
     unsafe {
         processor::disable_interrupts()
     }
+    let core: usize = processor::get_current_core().into();
 
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
-    let current_thread = handler.current;
+    let current_thread = handler.cores[core].current;
 
     unsafe {
         processor::enable_interrupts()
@@ -137,9 +146,9 @@ pub fn get_next_thread_ptr() -> usize {
     unsafe {
         processor::disable_interrupts()
     }
-
+    let core: usize = processor::get_current_core().into();
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
-    let next_thread = handler.next;
+    let next_thread = handler.cores[core].next;
 
     unsafe {
         processor::enable_interrupts()
@@ -163,6 +172,7 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
             },
             0xff,
             false,
+            Core::Core0
         ) {
             Ok(tcb) => {
                 insert_tcb(0, tcb);
@@ -179,7 +189,7 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
 }
 
 pub fn create_thread(stack: &mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
-    create_thread_with_config(stack, handler_fn, 0x00, false)
+    create_thread_with_config(stack, handler_fn, 0x00, false, Core::None)
 }
 
 pub fn create_thread_with_config(
@@ -187,6 +197,7 @@ pub fn create_thread_with_config(
     handler_fn: fn() -> !,
     priority: u8,
     priviliged: bool,
+    affinity: Core
 ) -> Result<(), u8> {
     unsafe {
         let cs = critical_section::acquire();
@@ -200,7 +211,7 @@ pub fn create_thread_with_config(
             return Err(2); // Not enough privileges
         }
 
-        match create_tcb(stack, handler_fn, priority, priviliged) {
+        match create_tcb(stack, handler_fn, priority, priviliged, affinity) {
             Ok(tcb) => {
                 insert_tcb(handler.add_idx, tcb);
                 handler.add_idx = handler.add_idx + 1;
@@ -264,6 +275,7 @@ fn create_tcb(
     handler_fn: fn() -> !,
     priority: u8,
     priviliged: bool,
+    affinity: Core
 ) -> Result<ThreadControlBlock, u8> {
     if stack.len() < 32 {
         error!("Stack size too small");
@@ -304,7 +316,7 @@ fn create_tcb(
         status: ThreadStatus::Idle,
         sleep_ticks: 0,
         core: Core::None,
-        affinity: Core::None,
+        affinity: affinity,
     };
     Ok(tcb)
 }
