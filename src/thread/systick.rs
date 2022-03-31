@@ -13,6 +13,7 @@ const ICSR: u32 = 0xE000ED04; // 	Interrupt Control and State Register
 
 #[exception]
 fn SysTick() {
+    defmt::trace!("systick - iv call");
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     if handler.inited {
         let count = SYST::get_current();
@@ -23,6 +24,8 @@ fn SysTick() {
         }
         handler.prev_cnt = count;
     }
+    defmt::trace!("systick - Running tick");
+    super::run_tick();
     systick_handler()
 }
 
@@ -30,7 +33,7 @@ fn SysTick() {
 fn systick_handler() {
     let cs = unsafe { critical_section::acquire() };
     let curr_core: usize = processor::get_current_core().into();
-    defmt::trace!("systick - handler");
+    
     // Safety: We're inside our critical section
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     let core_state = &mut handler.cores[curr_core];
@@ -39,8 +42,6 @@ fn systick_handler() {
 
         if core_state.current == core_state.next {
             // schedule a thread to be run
-            defmt::trace!("systick - Running tick");
-            super::run_tick();
 
             defmt::trace!("systick - getting next thr idx");
             core_state.idx = super::get_next_thread_idx();
@@ -81,5 +82,6 @@ pub fn enable(syst: &mut SYST, reload: u32) {
 }
 
 pub fn run_systick() {
+    defmt::trace!("systick - manual call");
     systick_handler()
 }

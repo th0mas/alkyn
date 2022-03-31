@@ -159,11 +159,10 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
         let cs = critical_section::acquire();
         let ptr: usize = core::intrinsics::transmute(&__ALKYN_THREADS_GLOBAL);
         __ALKYN_THREADS_GLOBAL_PTR = ptr as u32;
-        critical_section::release(cs);
         create_idle_thr(Core::Core0, 0);
         create_idle_thr(Core::Core1, 1);
-        compiler_fence(Ordering::Release);
         __ALKYN_THREADS_GLOBAL.inited = true;
+        critical_section::release(cs);
         systick::enable(syst, ticks);
         systick::run_systick();
         loop {
@@ -191,7 +190,7 @@ unsafe fn create_idle_thr(core: Core, idx: usize) {
             Ok(tcb) => {
                 insert_tcb(idx, tcb); // BUG!
             }
-            _ => defmt::error!("Alkyn: Could not create idle thread for core 0!"),
+            _ => defmt::error!("Alkyn: Could not create idle thread for core!"),
         };
 }
 
@@ -267,17 +266,21 @@ pub fn get_next_thread_idx() -> usize {
 
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
 
-    match handler
+    let new_idx = match handler
         .threads
         .iter()
         .enumerate()
         .filter(|&(_, x)| Core::get_allowed().contains(&x.affinity))
-        .filter(|&(idx, x)| idx > 0 && idx < handler.add_idx && x.status != ThreadStatus::Sleeping)
+        .filter(|&(idx, x)| (idx > 0) && (idx < handler.add_idx) && (x.status != ThreadStatus::Sleeping))
         .max_by(|&(_, a), &(_, b)| a.priority.cmp(&b.priority))
     {
-        Some((idx, _)) => idx,
-        _ => 0,
-    }
+        Some((idx, _)) => {
+            idx
+        },
+        _ => processor::get_current_core().into(),
+    };
+    defmt::trace!("thr - nxt idx: {}", new_idx);
+    new_idx
 }
 
 fn create_tcb(

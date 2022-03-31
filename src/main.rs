@@ -97,7 +97,7 @@ fn main() -> ! {
                 }
             });
 
-    thread::init(&mut m_pac.SYST, 80_000); // 100hz
+    thread::init(&mut m_pac.SYST, 85_000); // 100hz
 
 }
 
