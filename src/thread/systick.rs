@@ -14,6 +14,7 @@ const ICSR: u32 = 0xE000ED04; // 	Interrupt Control and State Register
 #[exception]
 fn SysTick() {
     defmt::trace!("systick - iv call");
+    let cs = unsafe {critical_section::acquire()};
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     if handler.inited {
         let count = SYST::get_current();
@@ -26,7 +27,9 @@ fn SysTick() {
     }
     defmt::trace!("systick - Running tick");
     super::run_tick();
-    systick_handler()
+    unsafe {critical_section::release(cs)}
+    systick_handler();
+    
 }
 
 #[inline]

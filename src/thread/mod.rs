@@ -1,5 +1,4 @@
-use core::sync::atomic::Ordering;
-use core::sync::atomic::compiler_fence;
+use core::{ptr, marker::PhantomData};
 use cortex_m::{asm, peripheral::SYST};
 use defmt::error;
 
@@ -15,11 +14,11 @@ const MAX_THREADS: usize = 32;
 const CORES: usize = 2;
 
 #[repr(C)]
-pub struct ThreadingState {
+pub struct ThreadingState<'a> {
     cores: [CoreState; CORES],
     inited: bool,
     add_idx: usize,
-    threads: [ThreadControlBlock; MAX_THREADS],
+    threads: [ThreadControlBlock<'a>; MAX_THREADS],
     counter: u64,
     prev_cnt: u32,
 }
@@ -73,7 +72,7 @@ impl Core {
 /// A single thread's state
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct ThreadControlBlock {
+struct ThreadControlBlock<'a> {
     // start fields used in assembly, do not reorder them
     /// current stack pointer of this thread
     sp: u32,
@@ -84,6 +83,7 @@ struct ThreadControlBlock {
     sleep_ticks: u32,
     core: Core,
     affinity: Core,
+    _stack: PhantomData<&'a mut [u32]>
 }
 
 #[no_mangle]
@@ -104,12 +104,13 @@ pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
         sleep_ticks: 0,
         core: Core::None,
         affinity: Core::Core0,
+        _stack: PhantomData,
     }; 32],
     counter: 0,
     prev_cnt: 0,
 };
 
-impl ThreadingState {
+impl ThreadingState<'static> {
     pub fn set_next_to_curr(&mut self) {
         let core: usize = processor::get_current_core().into();
         self.cores[core].current = self.cores[core].next;
@@ -143,12 +144,12 @@ pub fn get_current_thread_ptr() -> usize {
 }
 
 pub fn get_next_thread_ptr() -> usize {
-    unsafe { processor::disable_interrupts() }
+    unsafe { processor::disable_interrupts() };
     let core: usize = processor::get_current_core().into();
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     let next_thread = handler.cores[core].next;
 
-    unsafe { processor::enable_interrupts() }
+    unsafe { processor::enable_interrupts() };
     next_thread
 }
 
@@ -177,7 +178,7 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
 /// Unsafe as this should only be called once per core, and no guards
 /// to make sure you don't do it twice
 unsafe fn create_idle_thr(core: Core, idx: usize) {
-    let mut idle_stack = [0xDEADBEEF; 64];
+    static mut idle_stack: [u32; 64] = [0xDEADBEEF; 64];
         match create_tcb(
             &mut idle_stack,
             || loop {
@@ -194,12 +195,15 @@ unsafe fn create_idle_thr(core: Core, idx: usize) {
         };
 }
 
-pub fn create_thread(stack: &mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
+/// Create a thread with default config.
+/// 
+/// This can be ran at any time. Threads have no core affinity and no privileges.
+pub fn create_thread(stack: &'static mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
     create_thread_with_config(stack, handler_fn, 0x00, false, Core::None)
 }
 
 pub fn create_thread_with_config(
-    stack: &mut [u32],
+    stack: &'static mut [u32],
     handler_fn: fn() -> !,
     priority: u8,
     priviliged: bool,
@@ -263,7 +267,7 @@ pub fn run_tick() {
 
 pub fn get_next_thread_idx() -> usize {
     // Safety:  Read only
-
+    let cs = unsafe {critical_section::acquire()};
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
 
     let new_idx = match handler
@@ -280,6 +284,7 @@ pub fn get_next_thread_idx() -> usize {
         _ => processor::get_current_core().into(),
     };
     defmt::trace!("thr - nxt idx: {}", new_idx);
+    unsafe {critical_section::release(cs)}
     new_idx
 }
 
@@ -330,11 +335,12 @@ fn create_tcb(
         sleep_ticks: 0,
         core: Core::None,
         affinity: affinity,
+        _stack: PhantomData,
     };
     Ok(tcb)
 }
 
-fn insert_tcb(idx: usize, tcb: ThreadControlBlock) {
+fn insert_tcb(idx: usize, tcb: ThreadControlBlock<'static>) {
     defmt::trace!("inserting with idx {}", idx);
     unsafe {
         let handler = &mut __ALKYN_THREADS_GLOBAL;
