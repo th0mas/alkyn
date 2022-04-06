@@ -39,6 +39,7 @@ const HEAP_SIZE: usize = 1024;
 static mut ALLOCATOR: AlkynHeap = AlkynHeap::empty();
 
 static mut TIMER: Option<hal::Timer> = Option::None;
+static mut stack3: [u32; 256] = [0xDEADBEEF; 256];
 
 // Setup logging
 defmt::timestamp!("{=u8}:{=u32:us}", { processor::get_current_core() }, {
@@ -93,8 +94,13 @@ fn main() -> ! {
             thread::sleep(100); // sleep for 10 ticks
         }
     });
+    let _ = thread::create_thread_with_config(unsafe {&mut stack3}, || {
+        loop {
+            thread::sleep(100);
+        }
+    }, 1, false, Core::Core1);
 
-    thread::init(&mut m_pac.SYST, 85_000); // 100hz
+    thread::init(&mut m_pac.SYST, 250_000); // 100hz
 }
 
 // End of file

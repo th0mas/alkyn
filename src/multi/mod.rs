@@ -4,13 +4,14 @@ use hal::multicore::{Multicore, Stack};
 use hal::{pac, Sio};
 use rp2040_hal as hal;
 use hal::pac::{interrupt, Interrupt, NVIC};
-use core::ptr;
 
-mod alloc;
+mod init;
 
+use crate::thread;
 use crate::processor;
 
 #[repr(u32)]
+#[derive(Copy, Clone)]
 enum MessageType {
   PendSv
 }
@@ -26,13 +27,12 @@ pub fn init_cores() {
     // Safety: We only use the required fields in this mod
     let mut pac = unsafe { pac::Peripherals::steal() };
     let mut sio = Sio::new(pac.SIO);
-    let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio);
+    let mut mc = init::Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio);
 
     let cores = mc.cores();
     let core1 = &mut cores[1];
     let _ = core1.spawn(core_boot, unsafe { &mut CORE1_STACK.mem });
     unsafe { CORE1_INIT.store(true, atomic::Ordering::Release) }
-    sio.fifo.write_blocking(1);
 }
 
 // Boot scheduler on each core
@@ -43,6 +43,16 @@ fn core_boot() -> ! {
     loop {}
 }
 
+/// Set PendSV on Core1
+/// 
+/// Only call within critical section
+pub unsafe fn send_pendsv() {
+  let pac = pac::Peripherals::steal();
+  let mut sio = Sio::new(pac.SIO);
+  sio.fifo.drain();
+  sio.fifo.write_blocking(MessageType::PendSv as u32)
+}
+
 #[interrupt]
 fn SIO_IRQ_PROC1() {
   let pac = unsafe { pac::Peripherals::steal() };
@@ -50,10 +60,9 @@ fn SIO_IRQ_PROC1() {
 
   // Safety: We know u32 is the enum type
   let msg: MessageType = unsafe {core::mem::transmute((sio.fifo.read_blocking())) };
-
   match msg {
     MessageType::PendSv =>{
-       defmt::info!("Recvd PendSv")
+      thread::systick::run_systick();
       },
     _ => defmt::error!("Unknown msg")
   }

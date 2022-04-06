@@ -8,7 +8,7 @@ use alloc::vec::{self, Vec};
 use crate::processor;
 mod msg;
 
-mod systick;
+pub mod systick;
 
 const MAX_THREADS: usize = 32;
 const CORES: usize = 2;
@@ -184,7 +184,7 @@ unsafe fn create_idle_thr(core: Core, idx: usize) {
             || loop {
                 processor::wait_for_event();
             },
-            0xff,
+            0x00,
             false,
             core,
         ) {
@@ -199,7 +199,7 @@ unsafe fn create_idle_thr(core: Core, idx: usize) {
 /// 
 /// This can be ran at any time. Threads have no core affinity and no privileges.
 pub fn create_thread(stack: &'static mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
-    create_thread_with_config(stack, handler_fn, 0x00, false, Core::None)
+    create_thread_with_config(stack, handler_fn, 0x01, false, Core::None)
 }
 
 pub fn create_thread_with_config(

@@ -1,4 +1,4 @@
-use crate::processor;
+use crate::{processor, multi};
 use core::ptr;
 use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m::peripheral::SYST;
@@ -8,8 +8,6 @@ use defmt::{debug, panic};
 use super::__ALKYN_THREADS_GLOBAL;
 
 static mut __ALKYN_SYST_ENABLE: bool = false;
-
-const ICSR: u32 = 0xE000ED04; // 	Interrupt Control and State Register
 
 #[exception]
 fn SysTick() {
@@ -27,7 +25,7 @@ fn SysTick() {
     }
     defmt::trace!("systick - Running tick");
     super::run_tick();
-    unsafe {critical_section::release(cs)}
+    unsafe {multi::send_pendsv(); critical_section::release(cs)}
     systick_handler();
     
 }
@@ -52,11 +50,10 @@ fn systick_handler() {
         }
         if core_state.current != core_state.next {
             unsafe {
-                let pend = ptr::read_volatile(ICSR as *const u32);
                 defmt::trace!("systick - setting pendsv");
                 critical_section::release(cs);
                 // Set PendSV bit to pending
-                ptr::write_volatile(ICSR as *mut u32, pend | 1 << 28);
+                processor::set_pendsv();
             }
         }
     }
