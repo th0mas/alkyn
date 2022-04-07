@@ -143,6 +143,17 @@ pub fn get_current_thread_ptr() -> usize {
     current_thread
 }
 
+pub fn get_current_thread_idx() -> usize {
+    unsafe { processor::disable_interrupts() }
+    let core: usize = processor::get_current_core().into();
+
+    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let idx = handler.cores[core].idx;
+
+    unsafe { processor::enable_interrupts() }
+    idx
+}
+
 pub fn get_next_thread_ptr() -> usize {
     unsafe { processor::disable_interrupts() };
     let core: usize = processor::get_current_core().into();
