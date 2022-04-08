@@ -29,11 +29,14 @@ mod supervisor;
 mod sync;
 mod thread;
 mod timer;
+
+use thread::msg;
+
 // use sparkfun_pro_micro_rp2040 as bsp;
 
 // Setup allocator
 use core::mem::MaybeUninit;
-const HEAP_SIZE: usize = 1024;
+const HEAP_SIZE: usize = 64000; // 64kb
 
 #[global_allocator]
 static mut ALLOCATOR: AlkynHeap = AlkynHeap::empty();
@@ -81,6 +84,7 @@ fn main() -> ! {
     let _ = thread::create_thread(unsafe { &mut stack1 }, move || {
         info!("Starting task 1!");
         let mut count: i32 = 0;
+        msg::Message::new("hello!").send(1).expect("could not send");
         loop {
             let _ = info!("in task 1, count: {} !!", count);
             count += 2;
@@ -90,7 +94,15 @@ fn main() -> ! {
     let _ = thread::create_thread(unsafe { &mut stack2 }, move || {
         info!("Starting task 2!");
         loop {
-            let _ = info!("in task 2 !!");
+            let _ = info!("in task {} !!", thread::get_current_thread_idx());
+            match msg::check_receive() {
+                Some(s) => {
+                    let v = s.downcast::<&str>()
+                        .expect("Could not conv to str");
+                    info!("Recvd: {}", *v)
+                },
+                None => ()
+            }
             thread::sleep(100); // sleep for 10 ticks
         }
     });

@@ -1,4 +1,4 @@
-use core::{ptr, marker::PhantomData};
+use core::{marker::PhantomData, ptr};
 use cortex_m::{asm, peripheral::SYST};
 use defmt::error;
 
@@ -6,7 +6,8 @@ extern crate alloc;
 use alloc::vec::{self, Vec};
 
 use crate::processor;
-mod msg;
+pub mod msg;
+pub mod registry;
 
 pub mod systick;
 
@@ -18,7 +19,8 @@ pub struct ThreadingState<'a> {
     cores: [CoreState; CORES],
     inited: bool,
     add_idx: usize,
-    threads: [ThreadControlBlock<'a>; MAX_THREADS],
+    // threads: [ThreadControlBlock<'a>; MAX_THREADS],
+    threads: Vec<ThreadControlBlock<'a>>,
     counter: u64,
     prev_cnt: u32,
 }
@@ -34,7 +36,7 @@ pub struct CoreState {
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ThreadStatus {
-    Idle,
+    Ready,
     Sleeping,
     MailPending, //
     MailRecv,
@@ -83,7 +85,7 @@ struct ThreadControlBlock<'a> {
     sleep_ticks: u32,
     core: Core,
     affinity: Core,
-    _stack: PhantomData<&'a mut [u32]>
+    _stack: PhantomData<&'a mut [u32]>,
 }
 
 #[no_mangle]
@@ -96,16 +98,7 @@ pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
     }; CORES],
     inited: false,
     add_idx: CORES,
-    threads: [ThreadControlBlock {
-        sp: 0,
-        status: ThreadStatus::Idle,
-        priority: 0,
-        privileged: 0,
-        sleep_ticks: 0,
-        core: Core::None,
-        affinity: Core::Core0,
-        _stack: PhantomData,
-    }; 32],
+    threads: Vec::new(),
     counter: 0,
     prev_cnt: 0,
 };
@@ -171,9 +164,11 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
         let cs = critical_section::acquire();
         let ptr: usize = core::intrinsics::transmute(&__ALKYN_THREADS_GLOBAL);
         __ALKYN_THREADS_GLOBAL_PTR = ptr as u32;
+        defmt::trace!("Creating idle threads");
         create_idle_thr(Core::Core0, 0);
         create_idle_thr(Core::Core1, 1);
         __ALKYN_THREADS_GLOBAL.inited = true;
+        defmt::trace!("Alkyn inited, enabling tick");
         critical_section::release(cs);
         systick::enable(syst, ticks);
         systick::run_systick();
@@ -183,31 +178,30 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
     }
 }
 
-
-/// Create an idle thread on a core. 
-/// 
+/// Create an idle thread on a core.
+///
 /// Unsafe as this should only be called once per core, and no guards
 /// to make sure you don't do it twice
 unsafe fn create_idle_thr(core: Core, idx: usize) {
     static mut idle_stack: [u32; 64] = [0xDEADBEEF; 64];
-        match create_tcb(
-            &mut idle_stack,
-            || loop {
-                processor::wait_for_event();
-            },
-            0x00,
-            false,
-            core,
-        ) {
-            Ok(tcb) => {
-                insert_tcb(idx, tcb); // BUG!
-            }
-            _ => defmt::error!("Alkyn: Could not create idle thread for core!"),
-        };
+    match create_tcb(
+        &mut idle_stack,
+        || loop {
+            processor::wait_for_event();
+        },
+        0x00,
+        false,
+        core,
+    ) {
+        Ok(tcb) => {
+            insert_tcb(tcb); // BUG!
+        }
+        _ => defmt::error!("Alkyn: Could not create idle thread for core!"),
+    };
 }
 
 /// Create a thread with default config.
-/// 
+///
 /// This can be ran at any time. Threads have no core affinity and no privileges.
 pub fn create_thread(stack: &'static mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
     create_thread_with_config(stack, handler_fn, 0x01, false, Core::None)
@@ -225,7 +219,7 @@ pub fn create_thread_with_config(
         let handler = &mut __ALKYN_THREADS_GLOBAL;
         let curr_core: usize = processor::get_current_core().into();
 
-        if handler.add_idx >= handler.threads.len() {
+        if handler.threads.len() >= MAX_THREADS {
             return Err(1); // Too many threads
         }
 
@@ -235,11 +229,11 @@ pub fn create_thread_with_config(
 
         match create_tcb(stack, handler_fn, priority, priviliged, affinity) {
             Ok(tcb) => {
-                insert_tcb(handler.add_idx, tcb);
-                handler.add_idx = handler.add_idx + 1;
+                insert_tcb(tcb);
             }
             Err(e) => {
                 critical_section::release(cs);
+                defmt::debug!("Error creating thread");
                 return Err(e);
             }
         }
@@ -252,23 +246,21 @@ pub fn create_thread_with_config(
 pub fn sleep(ticks: u32) {
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     let core_status = handler.cores[processor::get_current_core() as usize];
-    if core_status.idx > 0 {
-        defmt::debug!("sleep - systick");
-        handler.threads[core_status.idx].status = ThreadStatus::Sleeping;
-        handler.threads[core_status.idx].sleep_ticks = ticks;
-        systick::run_systick();
-    }
+    defmt::debug!("sleep - systick");
+    handler.threads[core_status.idx].status = ThreadStatus::Sleeping;
+    handler.threads[core_status.idx].sleep_ticks = ticks;
+    systick::run_systick();
 }
 
 pub fn run_tick() {
     let cs = unsafe { critical_section::acquire() };
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
-    for i in 1..handler.add_idx {
+    for i in 0..handler.threads.len() {
         if handler.threads[i].status == ThreadStatus::Sleeping {
             if handler.threads[i].sleep_ticks > 0 {
                 handler.threads[i].sleep_ticks = handler.threads[i].sleep_ticks - 1;
             } else {
-                handler.threads[i].status = ThreadStatus::Idle;
+                handler.threads[i].status = ThreadStatus::Ready;
             }
         }
     }
@@ -278,7 +270,7 @@ pub fn run_tick() {
 
 pub fn get_next_thread_idx() -> usize {
     // Safety:  Read only
-    let cs = unsafe {critical_section::acquire()};
+    let cs = unsafe { critical_section::acquire() };
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
 
     let new_idx = match handler
@@ -286,16 +278,14 @@ pub fn get_next_thread_idx() -> usize {
         .iter()
         .enumerate()
         .filter(|&(_, x)| Core::get_allowed().contains(&x.affinity))
-        .filter(|&(idx, x)| (idx > 0) && (idx < handler.add_idx) && (x.status != ThreadStatus::Sleeping))
+        .filter(|&(idx, x)| (idx < handler.add_idx) && (x.status == ThreadStatus::Ready))
         .max_by(|&(_, a), &(_, b)| a.priority.cmp(&b.priority))
     {
-        Some((idx, _)) => {
-            idx
-        },
+        Some((idx, _)) => idx,
         _ => processor::get_current_core().into(),
     };
     defmt::trace!("thr - nxt idx: {}", new_idx);
-    unsafe {critical_section::release(cs)}
+    unsafe { critical_section::release(cs) }
     new_idx
 }
 
@@ -342,7 +332,7 @@ fn create_tcb(
         sp: sp as u32,
         priority: priority,
         privileged: priviliged.into(),
-        status: ThreadStatus::Idle,
+        status: ThreadStatus::Ready,
         sleep_ticks: 0,
         core: Core::None,
         affinity: affinity,
@@ -351,10 +341,11 @@ fn create_tcb(
     Ok(tcb)
 }
 
-fn insert_tcb(idx: usize, tcb: ThreadControlBlock<'static>) {
-    defmt::trace!("inserting with idx {}", idx);
+fn insert_tcb(tcb: ThreadControlBlock<'static>) {
     unsafe {
         let handler = &mut __ALKYN_THREADS_GLOBAL;
-        handler.threads[idx] = tcb;
+        defmt::trace!("inserting with idx {}", handler.threads.len());
+        handler.add_idx += 1;
+        handler.threads.push(tcb)
     }
 }

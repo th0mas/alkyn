@@ -38,7 +38,7 @@ where
 
     pub fn send(self, idx: usize) -> Result<usize, usize> {
         // Box up our stuff
-        let b: Box<dyn Any> = Box::new(self.msg);
+        let b: Box<dyn Any> = Box::new(*self.msg);
         unsafe {
             let cs = critical_section::acquire();
             ALKYN_MAILBOX[idx].push(RawMessage {
@@ -46,14 +46,16 @@ where
                 msg: Box::into_raw(b),
             });
 
-            super::__ALKYN_THREADS_GLOBAL.threads[idx].status = super::ThreadStatus::MailPending;
+            if super::__ALKYN_THREADS_GLOBAL.threads[idx].status == super::ThreadStatus::MailPending {
+                super::__ALKYN_THREADS_GLOBAL.threads[idx].status = super::ThreadStatus::Ready
+            };
             critical_section::release(cs)
         };
         Ok(idx)
     }
 }
 
-pub fn check_recv() -> Option<Box<dyn Any>> {
+pub fn check_receive() -> Option<Box<dyn Any>> {
   let current_thread = super::get_current_thread_idx();
   let msg: Option<RawMessage>;
   unsafe {
@@ -61,7 +63,6 @@ pub fn check_recv() -> Option<Box<dyn Any>> {
     msg = ALKYN_MAILBOX[current_thread].pop();
     critical_section::release(cs)
   };
-
 
   match msg {
     Some(m) => {
@@ -71,4 +72,17 @@ pub fn check_recv() -> Option<Box<dyn Any>> {
     None => None
   }
 
+}
+
+pub fn receive() -> Box<dyn Any> {
+    loop {
+        let m = check_receive();
+        match m {
+            Some(m) => return m,
+            None => unsafe {
+                let idx = super::get_current_thread_idx();
+                super::__ALKYN_THREADS_GLOBAL.threads[idx].status = super::ThreadStatus::MailPending;
+            }
+        }
+    }
 }
