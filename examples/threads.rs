@@ -9,28 +9,22 @@
 #![feature(generic_const_exprs)]
 #![feature(default_alloc_error_handler)]
 #![allow(non_upper_case_globals)]
+#![feature(const_btree_new)]
 
-use cortex_m_rt::entry;
+use alkyn::rt::entry;
 use defmt::*;
-use heap::AlkynHeap;
+use alkyn::heap::AlkynHeap;
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
 use hal::pac;
 use rp2040_hal as hal;
-use thread::Core;
+use alkyn::thread::Core;
 
-mod heap;
-mod logger;
-mod multi;
-mod processor;
-mod supervisor;
-mod sync;
-mod thread;
-mod timer;
+use alkyn::thread::msg;
 
-use thread::msg;
+use alkyn::{processor, thread};
 
 // use sparkfun_pro_micro_rp2040 as bsp;
 
@@ -81,7 +75,7 @@ fn main() -> ! {
     info!("Initing threads");
     static mut stack1: [u32; 128] = [0xDEADBEEF; 128];
     static mut stack2: [u32; 128] = [0xDEADBEEF; 128];
-    let _ = thread::create_thread(unsafe { &mut stack1 }, move || {
+    let _ = thread::create_thread("task1", unsafe { &mut stack1 }, move || {
         info!("Starting task 1!");
         let mut count: i32 = 0;
         msg::Message::new("hello!").send(1).expect("could not send");
@@ -91,7 +85,7 @@ fn main() -> ! {
             thread::sleep(500); // sleep for 50 ticks
         }
     });
-    let _ = thread::create_thread(unsafe { &mut stack2 }, move || {
+    let _ = thread::create_thread("task2", unsafe { &mut stack2 }, move || {
         info!("Starting task 2!");
         loop {
             let _ = info!("in task {} !!", thread::get_current_thread_idx());
@@ -106,7 +100,7 @@ fn main() -> ! {
             thread::sleep(100); // sleep for 10 ticks
         }
     });
-    let _ = thread::create_thread_with_config(unsafe {&mut stack3}, || {
+    let _ = thread::create_thread_with_config("task3", unsafe {&mut stack3}, || {
         loop {
             thread::sleep(100);
         }

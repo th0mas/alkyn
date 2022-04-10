@@ -203,11 +203,12 @@ unsafe fn create_idle_thr(core: Core, idx: usize) {
 /// Create a thread with default config.
 ///
 /// This can be ran at any time. Threads have no core affinity and no privileges.
-pub fn create_thread(stack: &'static mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
-    create_thread_with_config(stack, handler_fn, 0x01, false, Core::None)
+pub fn create_thread(name: &'static str, stack: &'static mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
+    create_thread_with_config(name, stack, handler_fn, 0x01, false, Core::None)
 }
 
 pub fn create_thread_with_config(
+    name: &'static str,
     stack: &'static mut [u32],
     handler_fn: fn() -> !,
     priority: u8,
@@ -229,7 +230,8 @@ pub fn create_thread_with_config(
 
         match create_tcb(stack, handler_fn, priority, priviliged, affinity) {
             Ok(tcb) => {
-                insert_tcb(tcb);
+                let idx = insert_tcb(tcb);
+                registry::set_registry_for_idx(idx, name)
             }
             Err(e) => {
                 critical_section::release(cs);
@@ -316,7 +318,6 @@ fn create_tcb(
     stack[idx - 5] = 0x22222222; // R2
     stack[idx - 6] = 0x11111111; // R1
     stack[idx - 7] = 0x00000000; // R0
-                                 // aditional regs
     stack[idx - 08] = 0x77777777; // R7
     stack[idx - 09] = 0x66666666; // R6
     stack[idx - 10] = 0x55555555; // R5
@@ -341,11 +342,12 @@ fn create_tcb(
     Ok(tcb)
 }
 
-fn insert_tcb(tcb: ThreadControlBlock<'static>) {
+fn insert_tcb(tcb: ThreadControlBlock<'static>) -> usize {
     unsafe {
         let handler = &mut __ALKYN_THREADS_GLOBAL;
         defmt::trace!("inserting with idx {}", handler.threads.len());
         handler.add_idx += 1;
-        handler.threads.push(tcb)
+        handler.threads.push(tcb);
+        handler.threads.len()
     }
 }
