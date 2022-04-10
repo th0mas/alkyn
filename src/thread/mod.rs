@@ -203,7 +203,11 @@ unsafe fn create_idle_thr(core: Core, idx: usize) {
 /// Create a thread with default config.
 ///
 /// This can be ran at any time. Threads have no core affinity and no privileges.
-pub fn create_thread(name: &'static str, stack: &'static mut [u32], handler_fn: fn() -> !) -> Result<(), u8> {
+pub fn create_thread(
+    name: &'static str,
+    stack: &'static mut [u32],
+    handler_fn: fn() -> !,
+) -> Result<(), u8> {
     create_thread_with_config(name, stack, handler_fn, 0x01, false, Core::None)
 }
 

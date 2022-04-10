@@ -1,5 +1,5 @@
 //! Multicore support
-//! 
+//!
 //! Adapeted from the RP2040-Hal to allow access to other memory regions
 //!
 //! This module handles setup of the 2nd cpu core on the rp2040, which we refer to as core1.

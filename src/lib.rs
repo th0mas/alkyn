@@ -19,6 +19,7 @@ use panic_probe as _;
 use hal::pac;
 use rp2040_hal as hal;
 
+pub mod genserver;
 pub mod heap;
 pub mod logger;
 pub mod multi;
@@ -27,4 +28,3 @@ pub mod supervisor;
 pub mod sync;
 pub mod thread;
 pub mod timer;
-pub mod genserver;

@@ -1,7 +1,7 @@
-// Abstract out some unsafe assembly 
-use cortex_m::{asm, interrupt};
+// Abstract out some unsafe assembly
 use crate::pac;
 use core::ptr;
+use cortex_m::{asm, interrupt};
 
 const ICSR: u32 = 0xE000ED04;
 

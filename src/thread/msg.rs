@@ -46,7 +46,8 @@ where
                 msg: Box::into_raw(b),
             });
 
-            if super::__ALKYN_THREADS_GLOBAL.threads[idx].status == super::ThreadStatus::MailPending {
+            if super::__ALKYN_THREADS_GLOBAL.threads[idx].status == super::ThreadStatus::MailPending
+            {
                 super::__ALKYN_THREADS_GLOBAL.threads[idx].status = super::ThreadStatus::Ready
             };
             critical_section::release(cs)
@@ -56,22 +57,21 @@ where
 }
 
 pub fn check_receive() -> Option<Box<dyn Any>> {
-  let current_thread = super::get_current_thread_idx();
-  let msg: Option<RawMessage>;
-  unsafe {
-    let cs = critical_section::acquire();
-    msg = ALKYN_MAILBOX[current_thread].pop();
-    critical_section::release(cs)
-  };
+    let current_thread = super::get_current_thread_idx();
+    let msg: Option<RawMessage>;
+    unsafe {
+        let cs = critical_section::acquire();
+        msg = ALKYN_MAILBOX[current_thread].pop();
+        critical_section::release(cs)
+    };
 
-  match msg {
-    Some(m) => {
-      let hydrated_msg = unsafe {Box::from_raw(m.msg)};
-      Some(hydrated_msg)
-    },
-    None => None
-  }
-
+    match msg {
+        Some(m) => {
+            let hydrated_msg = unsafe { Box::from_raw(m.msg) };
+            Some(hydrated_msg)
+        }
+        None => None,
+    }
 }
 
 pub fn receive() -> Box<dyn Any> {
@@ -81,8 +81,9 @@ pub fn receive() -> Box<dyn Any> {
             Some(m) => return m,
             None => unsafe {
                 let idx = super::get_current_thread_idx();
-                super::__ALKYN_THREADS_GLOBAL.threads[idx].status = super::ThreadStatus::MailPending;
-            }
+                super::__ALKYN_THREADS_GLOBAL.threads[idx].status =
+                    super::ThreadStatus::MailPending;
+            },
         }
     }
 }

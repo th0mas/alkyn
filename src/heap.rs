@@ -7,7 +7,7 @@ use core::cell::RefCell;
 use core::ptr::{self, NonNull};
 use linked_list_allocator::Heap;
 
-use crate::sync::{self, Spinlock, Mutex};
+use crate::sync::{self, Mutex, Spinlock};
 
 pub struct AlkynHeap {
     heap: Mutex<RefCell<Heap>>,
@@ -51,21 +51,21 @@ impl AlkynHeap {
     /// - `size > 0`
     pub unsafe fn init(&mut self, start_addr: usize, size: usize) {
         self.lock = Spinlock::new().unwrap();
-        self.lock
-            .critical_section(|t| {
-                self.heap.borrow(t).borrow_mut().init(start_addr, size);
-            })
-
+        self.lock.critical_section(|t| {
+            self.heap.borrow(t).borrow_mut().init(start_addr, size);
+        })
     }
 
     /// Returns an estimate of the amount of bytes in use.
     pub fn used(&self) -> usize {
-        self.lock.critical_section(|t| self.heap.borrow(t).borrow_mut().used())
+        self.lock
+            .critical_section(|t| self.heap.borrow(t).borrow_mut().used())
     }
 
     /// Returns an estimate of the amount of bytes available.
     pub fn free(&self) -> usize {
-        self.lock.critical_section(|t| self.heap.borrow(t).borrow_mut().free())
+        self.lock
+            .critical_section(|t| self.heap.borrow(t).borrow_mut().free())
     }
 }
 
@@ -73,7 +73,7 @@ unsafe impl GlobalAlloc for AlkynHeap {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         self.lock.critical_section(|t| {
             self.heap
-            .borrow(t)
+                .borrow(t)
                 .borrow_mut()
                 .allocate_first_fit(layout)
                 .ok()
@@ -84,7 +84,7 @@ unsafe impl GlobalAlloc for AlkynHeap {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.lock.critical_section(|t| {
             self.heap
-            .borrow(t)
+                .borrow(t)
                 .borrow_mut()
                 .deallocate(NonNull::new_unchecked(ptr), layout)
         });

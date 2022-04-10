@@ -71,7 +71,7 @@ impl Spinlock {
 
     pub const fn empty() -> Self {
         Self {
-            lock: LockToken(30)
+            lock: LockToken(30),
         }
     }
 
@@ -111,14 +111,19 @@ impl Spinlock {
         sio.spinlock[self.lock.0 as usize].write_with_zero(|b| b.bits(1))
     }
 
-    pub fn critical_section<F, R>(&self, f:F) -> R
-    where F: FnOnce(&LockToken) -> R {
-        unsafe {processor::disable_interrupts() };
+    pub fn critical_section<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&LockToken) -> R,
+    {
+        unsafe { processor::disable_interrupts() };
         // Ensure the compiler doesn't re-order accesses and violate safety here
         core::sync::atomic::compiler_fence(Ordering::SeqCst);
         self.claim();
         let r = f(&LockToken(1));
-        unsafe {self.release(); processor::enable_interrupts();};
+        unsafe {
+            self.release();
+            processor::enable_interrupts();
+        };
         r
     }
 }

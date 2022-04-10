@@ -69,15 +69,15 @@ unsafe impl defmt::Logger for Logger {
 }
 
 fn do_write(bytes: &[u8]) {
-  unsafe { handle().write_all(bytes) }
+    unsafe { handle().write_all(bytes) }
 }
 
 #[repr(C)]
 struct Header {
-  id: [u8; 16],
-  max_up_channels: usize,
-  max_down_channels: usize,
-  up_channel: Channel,
+    id: [u8; 16],
+    max_up_channels: usize,
+    max_down_channels: usize,
+    up_channel: Channel,
 }
 
 // make sure we only get shared references to the header/channel (avoid UB)
@@ -85,30 +85,30 @@ struct Header {
 /// `Channel` API is not re-entrant; this handle should not be held from different execution
 /// contexts (e.g. thread-mode, interrupt context)
 unsafe fn handle() -> &'static Channel {
-  // NOTE the `rtt-target` API is too permissive. It allows writing arbitrary data to any
-  // channel (`set_print_channel` + `rprint*`) and that can corrupt defmt log frames.
-  // So we declare the RTT control block here and make it impossible to use `rtt-target` together
-  // with this crate.
-  #[no_mangle]
-  static mut _SEGGER_RTT: Header = Header {
-      id: *b"SEGGER RTT\0\0\0\0\0\0",
-      max_up_channels: 1,
-      max_down_channels: 0,
-      up_channel: Channel {
-          name: NAME as *const _ as *const u8,
-          buffer: unsafe { &mut BUFFER as *mut _ as *mut u8 },
-          size: BUF_SIZE,
-          write: AtomicUsize::new(0),
-          read: AtomicUsize::new(0),
-          flags: AtomicUsize::new(MODE_NON_BLOCKING_TRIM),
-      },
-  };
+    // NOTE the `rtt-target` API is too permissive. It allows writing arbitrary data to any
+    // channel (`set_print_channel` + `rprint*`) and that can corrupt defmt log frames.
+    // So we declare the RTT control block here and make it impossible to use `rtt-target` together
+    // with this crate.
+    #[no_mangle]
+    static mut _SEGGER_RTT: Header = Header {
+        id: *b"SEGGER RTT\0\0\0\0\0\0",
+        max_up_channels: 1,
+        max_down_channels: 0,
+        up_channel: Channel {
+            name: NAME as *const _ as *const u8,
+            buffer: unsafe { &mut BUFFER as *mut _ as *mut u8 },
+            size: BUF_SIZE,
+            write: AtomicUsize::new(0),
+            read: AtomicUsize::new(0),
+            flags: AtomicUsize::new(MODE_NON_BLOCKING_TRIM),
+        },
+    };
 
-  #[cfg_attr(target_os = "macos", link_section = ".uninit,defmt-rtt.BUFFER")]
-  #[cfg_attr(not(target_os = "macos"), link_section = ".uninit.defmt-rtt.BUFFER")]
-  static mut BUFFER: [u8; BUF_SIZE] = [0; BUF_SIZE];
+    #[cfg_attr(target_os = "macos", link_section = ".uninit,defmt-rtt.BUFFER")]
+    #[cfg_attr(not(target_os = "macos"), link_section = ".uninit.defmt-rtt.BUFFER")]
+    static mut BUFFER: [u8; BUF_SIZE] = [0; BUF_SIZE];
 
-  static NAME: &[u8] = b"defmt\0";
+    static NAME: &[u8] = b"defmt\0";
 
-  &_SEGGER_RTT.up_channel
+    &_SEGGER_RTT.up_channel
 }

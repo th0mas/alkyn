@@ -11,16 +11,16 @@
 #![allow(non_upper_case_globals)]
 #![feature(const_btree_new)]
 
+use alkyn::heap::AlkynHeap;
 use alkyn::rt::entry;
 use defmt::*;
-use alkyn::heap::AlkynHeap;
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
+use alkyn::thread::Core;
 use hal::pac;
 use rp2040_hal as hal;
-use alkyn::thread::Core;
 
 use alkyn::thread::msg;
 
@@ -91,20 +91,24 @@ fn main() -> ! {
             let _ = info!("in task {} !!", thread::get_current_thread_idx());
             match msg::check_receive() {
                 Some(s) => {
-                    let v = s.downcast::<&str>()
-                        .expect("Could not conv to str");
+                    let v = s.downcast::<&str>().expect("Could not conv to str");
                     info!("Recvd: {}", *v)
-                },
-                None => ()
+                }
+                None => (),
             }
             thread::sleep(100); // sleep for 10 ticks
         }
     });
-    let _ = thread::create_thread_with_config("task3", unsafe {&mut stack3}, || {
-        loop {
+    let _ = thread::create_thread_with_config(
+        "task3",
+        unsafe { &mut stack3 },
+        || loop {
             thread::sleep(100);
-        }
-    }, 1, false, Core::Core1);
+        },
+        1,
+        false,
+        Core::Core1,
+    );
 
     thread::init(&mut m_pac.SYST, 250_000); // 100hz
 }

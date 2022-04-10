@@ -1,4 +1,4 @@
-use crate::{processor, multi};
+use crate::{multi, processor};
 use core::ptr;
 use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m::peripheral::SYST;
@@ -12,7 +12,7 @@ static mut __ALKYN_SYST_ENABLE: bool = false;
 #[exception]
 fn SysTick() {
     defmt::trace!("systick - iv call");
-    let cs = unsafe {critical_section::acquire()};
+    let cs = unsafe { critical_section::acquire() };
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     if handler.inited {
         let count = SYST::get_current();
@@ -25,16 +25,18 @@ fn SysTick() {
     }
     defmt::trace!("systick - Running tick");
     super::run_tick();
-    unsafe {multi::send_pendsv(); critical_section::release(cs)}
+    unsafe {
+        multi::send_pendsv();
+        critical_section::release(cs)
+    }
     systick_handler();
-    
 }
 
 #[inline]
 fn systick_handler() {
     let cs = unsafe { critical_section::acquire() };
     let curr_core: usize = processor::get_current_core().into();
-    
+
     // Safety: We're inside our critical section
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     let core_state = &mut handler.cores[curr_core];
@@ -46,7 +48,9 @@ fn systick_handler() {
 
             defmt::trace!("systick - getting next thr idx");
             core_state.idx = super::get_next_thread_idx();
-            unsafe { core_state.next = core::intrinsics::transmute(&handler.threads[core_state.idx]) }
+            unsafe {
+                core_state.next = core::intrinsics::transmute(&handler.threads[core_state.idx])
+            }
         }
         if core_state.current != core_state.next {
             unsafe {

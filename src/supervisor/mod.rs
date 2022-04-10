@@ -2,8 +2,7 @@ use core::arch::asm;
 use cortex_m::register;
 use cortex_m_rt::exception;
 
-use crate::{thread, processor};
-
+use crate::{processor, thread};
 
 #[exception]
 fn PendSV() {
