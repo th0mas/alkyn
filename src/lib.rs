@@ -2,7 +2,6 @@
 //!
 //! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
-#![no_main]
 #![feature(core_intrinsics)]
 #![feature(asm_const)]
 #![feature(const_option)]
@@ -12,11 +11,9 @@
 #![feature(const_btree_new)]
 
 pub use cortex_m_rt as rt;
-use panic_probe as _;
-
-// Provide an alias for our BSP so we can switch targets quickly.
-// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
+use defmt::info;
 use hal::pac;
+use panic_probe as _;
 use rp2040_hal as hal;
 
 pub mod genserver;
@@ -28,3 +25,42 @@ pub mod supervisor;
 pub mod sync;
 pub mod thread;
 pub mod timer;
+
+// Setup allocator
+use core::mem::MaybeUninit;
+use heap::AlkynHeap;
+const HEAP_SIZE: usize = 64000; // 64kb
+
+#[global_allocator]
+static mut ALLOCATOR: AlkynHeap = AlkynHeap::empty();
+
+static mut TIMER: Option<hal::Timer> = Option::None;
+
+// Setup logging
+defmt::timestamp!("{=u8}:{=u32:us}", { processor::get_current_core() }, {
+    // safety, this is read only
+    unsafe {
+        match &TIMER {
+            Some(timer) => timer.get_counter_low(),
+            None => 0,
+        }
+    }
+});
+
+pub fn init(mut pac: pac::Peripherals) {
+    info!("alkyn: Initing memory and peripherals");
+    // Fix spinlocks
+    unsafe {
+        (*pac::SIO::ptr()).spinlock[31].write(|w| w.bits(0));
+    }
+    static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+    unsafe {
+        ALLOCATOR.init((&mut HEAP).as_ptr() as usize, HEAP_SIZE);
+        TIMER = Some(hal::Timer::new(pac.TIMER, &mut pac.RESETS));
+    }
+}
+
+pub fn start(mut cortex_pac: cortex_m::Peripherals, ticks: u32) -> ! {
+    info!("alkyn: Starting");
+    thread::init(&mut cortex_pac.SYST, ticks)
+}

@@ -1,17 +1,7 @@
-//! Blinks the LED on a Pico board
-//!
-//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
-#![feature(core_intrinsics)]
-#![feature(asm_const)]
-#![feature(const_option)]
-#![feature(generic_const_exprs)]
 #![feature(default_alloc_error_handler)]
-#![allow(non_upper_case_globals)]
-#![feature(const_btree_new)]
 
-use alkyn::heap::AlkynHeap;
 use alkyn::rt::entry;
 use defmt::*;
 use panic_probe as _;
@@ -24,30 +14,7 @@ use rp2040_hal as hal;
 
 use alkyn::thread::msg;
 
-use alkyn::{processor, thread};
-
-// use sparkfun_pro_micro_rp2040 as bsp;
-
-// Setup allocator
-use core::mem::MaybeUninit;
-const HEAP_SIZE: usize = 64000; // 64kb
-
-#[global_allocator]
-static mut ALLOCATOR: AlkynHeap = AlkynHeap::empty();
-
-static mut TIMER: Option<hal::Timer> = Option::None;
-static mut stack3: [u32; 256] = [0xDEADBEEF; 256];
-
-// Setup logging
-defmt::timestamp!("{=u8}:{=u32:us}", { processor::get_current_core() }, {
-    // safety, this is read only
-    unsafe {
-        match &TIMER {
-            Some(timer) => timer.get_counter_low(),
-            None => 0,
-        }
-    }
-});
+use alkyn::thread;
 
 #[link_section = ".boot_loader"]
 #[used]
@@ -55,27 +22,24 @@ pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 
 #[entry]
 fn main() -> ! {
-    // ffs
-    unsafe {
-        (*pac::SIO::ptr()).spinlock[31].write(|w| w.bits(0));
-    }
-    info!("Booting Alkyn");
-    info!("Alloc'ing heap");
-    static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-    unsafe { ALLOCATOR.init((&mut HEAP).as_ptr() as usize, HEAP_SIZE) }
 
-    let mut pac = pac::Peripherals::take().unwrap();
-    let mut m_pac = cortex_m::Peripherals::take().unwrap();
+    // Load in peripherals
+    let pac = pac::Peripherals::take().unwrap();
+    let m_pac = cortex_m::Peripherals::take().unwrap();
 
-    unsafe {
-        TIMER = Some(hal::Timer::new(pac.TIMER, &mut pac.RESETS));
-    }
+    // Let alkyn init them, we don't init from within the Kernel
+    // so they can be safely used outside
+    alkyn::init(pac);
 
-    info!("Booted");
-    info!("Initing threads");
-    static mut stack1: [u32; 128] = [0xDEADBEEF; 128];
-    static mut stack2: [u32; 128] = [0xDEADBEEF; 128];
-    let _ = thread::create_thread("task1", unsafe { &mut stack1 }, move || {
+
+    // Create the Stacks for our processes.
+    // Must be static so we can rely on their location in memory.
+    static mut STACK1: [u32; 128] = [0xDEADBEEF; 128];
+    static mut STACK2: [u32; 128] = [0xDEADBEEF; 128];
+    static mut STACK3: [u32; 128] = [0xDEADBEEF; 128];
+
+    // Create processes
+    let _ = thread::create_thread("task1", unsafe { &mut STACK1 }, move || {
         info!("Starting task 1!");
         let mut count: i32 = 0;
         msg::Message::new("hello!").send(1).expect("could not send");
@@ -85,7 +49,7 @@ fn main() -> ! {
             thread::sleep(500); // sleep for 50 ticks
         }
     });
-    let _ = thread::create_thread("task2", unsafe { &mut stack2 }, move || {
+    let _ = thread::create_thread("task2", unsafe { &mut STACK2 }, move || {
         info!("Starting task 2!");
         loop {
             let _ = info!("in task {} !!", thread::get_current_thread_idx());
@@ -101,7 +65,7 @@ fn main() -> ! {
     });
     let _ = thread::create_thread_with_config(
         "task3",
-        unsafe { &mut stack3 },
+        unsafe { &mut STACK3 },
         || loop {
             thread::sleep(100);
         },
@@ -110,7 +74,8 @@ fn main() -> ! {
         Core::Core1,
     );
 
-    thread::init(&mut m_pac.SYST, 250_000); // 100hz
+    // Start the OS
+    alkyn::start(m_pac, 80_000)
 }
 
 // End of file
