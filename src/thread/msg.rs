@@ -6,7 +6,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use defmt::Format;
 
-use crate::{processor, sync};
+use crate::{processor, sync, thread};
 
 // Init needed for static allocation
 const INIT: Vec<RawMessage> = Vec::new();
@@ -83,6 +83,7 @@ pub fn receive() -> Box<dyn Any> {
                 let idx = super::get_current_thread_idx();
                 super::__ALKYN_THREADS_GLOBAL.threads[idx].status =
                     super::ThreadStatus::MailPending;
+                thread::sleep(1);
             },
         }
     }

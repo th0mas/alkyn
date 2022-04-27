@@ -9,6 +9,7 @@
 #![feature(default_alloc_error_handler)]
 #![allow(non_upper_case_globals)]
 #![feature(const_btree_new)]
+#![feature(ptr_to_from_bits)]
 
 pub use cortex_m_rt as rt;
 use defmt::info;

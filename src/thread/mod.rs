@@ -355,3 +355,11 @@ fn insert_tcb(tcb: ThreadControlBlock<'static>) -> usize {
         handler.threads.len()
     }
 }
+
+pub unsafe fn kill_thread(idx: usize) {
+    let cs = critical_section::acquire();
+    let handler = &mut __ALKYN_THREADS_GLOBAL;
+    handler.threads.remove(idx);
+    handler.add_idx -= 1;
+    critical_section::release(cs)
+}
