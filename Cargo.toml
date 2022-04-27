@@ -1,6 +1,6 @@
 [package]
 name = "alkyn"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 description = "An experimental OS for the RP2040"
 readme = "README.md"
