@@ -11,7 +11,7 @@ pub mod registry;
 
 pub mod systick;
 
-const MAX_THREADS: usize = 32;
+const MAX_THREADS: usize = 256;
 const CORES: usize = 2;
 
 #[repr(C)]
@@ -253,7 +253,9 @@ pub fn sleep(ticks: u32) {
     let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
     let core_status = handler.cores[processor::get_current_core() as usize];
     defmt::debug!("sleep - systick");
-    handler.threads[core_status.idx].status = ThreadStatus::Sleeping;
+    if handler.threads[core_status.idx].status == ThreadStatus::Ready {
+        handler.threads[core_status.idx].status = ThreadStatus::Sleeping;
+    }
     handler.threads[core_status.idx].sleep_ticks = ticks;
     systick::run_systick();
 }

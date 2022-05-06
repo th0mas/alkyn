@@ -62,6 +62,7 @@ fn SIO_IRQ_PROC1() {
 
     // Safety: We know u32 is the enum type
     let msg: MessageType = unsafe { core::mem::transmute((sio.fifo.read_blocking())) };
+    sio.fifo.drain();
     match msg {
         MessageType::PendSv => {
             thread::systick::run_systick();

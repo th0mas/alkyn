@@ -44,7 +44,7 @@ fn main() -> ! {
         let mut count: i32 = 0;
         msg::Message::new("hello!").send(1).expect("could not send");
         loop {
-            let _ = info!("in task 1, count: {} !!", count);
+            let _ = info!("in task {}, count: {} !!", thread::get_current_thread_idx(), count);
             count += 2;
             thread::sleep(500); // sleep for 50 ticks
         }

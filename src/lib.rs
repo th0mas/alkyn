@@ -49,16 +49,23 @@ defmt::timestamp!("{=u8}:{=u32:us}", { processor::get_current_core() }, {
 });
 
 pub fn init(mut pac: pac::Peripherals) {
-    info!("alkyn: Initing memory and peripherals");
     // Fix spinlocks
     unsafe {
-        (*pac::SIO::ptr()).spinlock[31].write(|w| w.bits(0));
+        const SIO_BASE: u32 = 0xd0000000;
+        const SPINLOCK0_PTR: *mut u32 = (SIO_BASE + 0x100) as *mut u32;
+        const SPINLOCK_COUNT: usize = 32;
+        for i in 0..SPINLOCK_COUNT {
+            SPINLOCK0_PTR.wrapping_add(i).write_volatile(1);
+        }
     }
+    info!("alkyn: Initing memory and peripherals");
+    
     static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
     unsafe {
         ALLOCATOR.init((&mut HEAP).as_ptr() as usize, HEAP_SIZE);
         TIMER = Some(hal::Timer::new(pac.TIMER, &mut pac.RESETS));
     }
+    info!("alkyn: Heap initialized!");
 }
 
 pub fn start(mut cortex_pac: cortex_m::Peripherals, ticks: u32) -> ! {

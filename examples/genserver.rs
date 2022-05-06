@@ -50,7 +50,7 @@ fn main() -> ! {
     alkyn::init(pac);
 
     let eg = ExampleGenserver{};
-    let handle = eg.start(1);
+    eg.start(1);
     
 
     // Start the OS

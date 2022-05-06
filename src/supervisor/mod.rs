@@ -28,8 +28,8 @@ fn PendSV() {
         }
         let next = thread::get_next_thread_ptr();
         defmt::trace!("nxt thr: {:#x}", next);
-        let os = &mut thread::__ALKYN_THREADS_GLOBAL;
-        os.set_next_to_curr();
+        let kernel = &mut thread::__ALKYN_THREADS_GLOBAL;
+        kernel.set_next_to_curr();
         defmt::trace!("switching ctx");
         asm!(
             "ldr r3, [{nxt}, 0x0]", // next.sp
@@ -40,7 +40,7 @@ fn PendSV() {
             "mov r11, r7",
             "ldmia	r3!, {{r4-r7}}", // Load rest of stack
             "msr psp, r3", // Set stack pointer
-            "ldr r0, =0xFFFFFFFD", // set to 0
+            "ldr r0, =0xFFFFFFFD", // set execution mode
             "cpsie i", // Enable interrupts here
             "bx r0",
             nxt = in(reg) next,

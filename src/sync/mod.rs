@@ -75,13 +75,13 @@ impl Spinlock {
         }
     }
 
-    fn deinit(&self) -> LockToken {
+    pub fn deinit(&self) -> LockToken {
         unsafe {
             let _sync_lock = hal::sio::Spinlock::<SYNC_LOCK>::claim();
             let lock_index = unclaim_lock(self.lock);
             hal::sio::Spinlock::<SYNC_LOCK>::release();
 
-            unsafe { self.release() }
+            self.release();
 
             lock_index
         }
@@ -99,6 +99,7 @@ impl Spinlock {
     }
 
     pub fn claim(&self) -> &Self {
+        defmt::trace!("Claiming lock {}", self.lock.0);
         loop {
             if let Some(result) = self.try_claim() {
                 break result;
@@ -118,7 +119,7 @@ impl Spinlock {
         unsafe { processor::disable_interrupts() };
         // Ensure the compiler doesn't re-order accesses and violate safety here
         core::sync::atomic::compiler_fence(Ordering::SeqCst);
-        self.claim();
+        let _ = self.claim();
         let r = f(&LockToken(1));
         unsafe {
             self.release();
@@ -130,6 +131,7 @@ impl Spinlock {
 
 impl Drop for Spinlock {
     fn drop(&mut self) {
+        defmt::trace!("Releasing lock {}", self.lock.0);
         unsafe { self.release() }
     }
 }
