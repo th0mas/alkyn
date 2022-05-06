@@ -46,9 +46,16 @@ where
                 msg: Box::into_raw(b),
             });
 
-            if super::__ALKYN_THREADS_GLOBAL.threads[idx].status == super::ThreadStatus::MailPending
+            let handler = &mut super::ALKYN_THREADS_GLOBAL;
+
+            if handler.threads[idx].status == super::ThreadStatus::MailPending
             {
-                super::__ALKYN_THREADS_GLOBAL.threads[idx].status = super::ThreadStatus::Ready
+                handler.threads[idx].status = super::ThreadStatus::Ready;
+
+                if handler.threads[idx].priority > handler.threads[thread::get_current_thread_idx()].priority {
+                    critical_section::release(cs);
+                    thread::systick::run_ctxswitch();
+                }
             };
             critical_section::release(cs)
         };
@@ -81,7 +88,7 @@ pub fn receive() -> Box<dyn Any> {
             Some(m) => return m,
             None => unsafe {
                 let idx = super::get_current_thread_idx();
-                super::__ALKYN_THREADS_GLOBAL.threads[idx].status =
+                super::ALKYN_THREADS_GLOBAL.threads[idx].status =
                     super::ThreadStatus::MailPending;
                 thread::sleep(1);
             },

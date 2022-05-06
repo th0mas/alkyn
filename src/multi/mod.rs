@@ -61,10 +61,10 @@ fn SIO_IRQ_PROC1() {
     let mut sio = Sio::new(pac.SIO);
 
     // Safety: We know u32 is the enum type
-    let msg: MessageType = unsafe { core::mem::transmute((sio.fifo.read_blocking())) };
+    let msg: MessageType = unsafe { core::mem::transmute(sio.fifo.read_blocking()) };
     match msg {
         MessageType::PendSv => {
-            thread::systick::run_systick();
+            thread::systick::run_ctxswitch();
         }
         _ => defmt::error!("Unknown msg"),
     }

@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, ptr};
+use core::{marker::PhantomData, ptr, borrow::BorrowMut};
 use cortex_m::{asm, peripheral::SYST};
 use defmt::error;
 
@@ -90,7 +90,7 @@ struct ThreadControlBlock<'a> {
 
 #[no_mangle]
 static mut __ALKYN_THREADS_GLOBAL_PTR: u32 = 0;
-pub static mut __ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
+pub static mut ALKYN_THREADS_GLOBAL: ThreadingState = ThreadingState {
     cores: [CoreState {
         current: 0,
         next: 0,
@@ -116,7 +116,7 @@ pub fn get_counter() -> u64 {
     }
 
     // Safety: this is only run  on core 0
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
     let counter = handler.counter.clone();
     unsafe {
         processor::enable_interrupts();
@@ -129,7 +129,7 @@ pub fn get_current_thread_ptr() -> usize {
     unsafe { processor::disable_interrupts() }
     let core: usize = processor::get_current_core().into();
 
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
     let current_thread = handler.cores[core].current;
 
     unsafe { processor::enable_interrupts() }
@@ -140,7 +140,7 @@ pub fn get_current_thread_idx() -> usize {
     unsafe { processor::disable_interrupts() }
     let core: usize = processor::get_current_core().into();
 
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
     let idx = handler.cores[core].idx;
 
     unsafe { processor::enable_interrupts() }
@@ -150,7 +150,7 @@ pub fn get_current_thread_idx() -> usize {
 pub fn get_next_thread_ptr() -> usize {
     unsafe { processor::disable_interrupts() };
     let core: usize = processor::get_current_core().into();
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
     let next_thread = handler.cores[core].next;
 
     unsafe { processor::enable_interrupts() };
@@ -162,16 +162,17 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
     crate::multi::init_cores();
     unsafe {
         let cs = critical_section::acquire();
-        let ptr: usize = core::intrinsics::transmute(&__ALKYN_THREADS_GLOBAL);
+        let ptr: usize = core::intrinsics::transmute(&ALKYN_THREADS_GLOBAL);
+        &ALKYN_THREADS_GLOBAL.threads.reserve_exact(MAX_THREADS);
         __ALKYN_THREADS_GLOBAL_PTR = ptr as u32;
         defmt::trace!("Creating idle threads");
         create_idle_thr(Core::Core0, 0);
         create_idle_thr(Core::Core1, 1);
-        __ALKYN_THREADS_GLOBAL.inited = true;
+        ALKYN_THREADS_GLOBAL.inited = true;
         defmt::trace!("Alkyn inited, enabling tick");
         critical_section::release(cs);
         systick::enable(syst, ticks);
-        systick::run_systick();
+        systick::run_ctxswitch();
         loop {
             processor::wait_for_event();
         }
@@ -221,7 +222,7 @@ pub fn create_thread_with_config(
 ) -> Result<(), u8> {
     unsafe {
         let cs = critical_section::acquire();
-        let handler = &mut __ALKYN_THREADS_GLOBAL;
+        let handler = &mut ALKYN_THREADS_GLOBAL;
         let curr_core: usize = processor::get_current_core().into();
 
         if handler.threads.len() >= MAX_THREADS {
@@ -250,23 +251,24 @@ pub fn create_thread_with_config(
 }
 
 pub fn sleep(ticks: u32) {
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
     let core_status = handler.cores[processor::get_current_core() as usize];
     defmt::debug!("sleep - systick");
     handler.threads[core_status.idx].status = ThreadStatus::Sleeping;
     handler.threads[core_status.idx].sleep_ticks = ticks;
-    systick::run_systick();
+    systick::run_ctxswitch();
 }
 
 pub fn run_tick() {
     let cs = unsafe { critical_section::acquire() };
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
-    for i in 0..handler.threads.len() {
-        if handler.threads[i].status == ThreadStatus::Sleeping {
-            if handler.threads[i].sleep_ticks > 0 {
-                handler.threads[i].sleep_ticks = handler.threads[i].sleep_ticks - 1;
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
+
+    for thr in handler.threads.iter_mut() {
+        if thr.status == ThreadStatus::Sleeping {
+            if thr.sleep_ticks > 0 {
+                thr.sleep_ticks = thr.sleep_ticks - 1
             } else {
-                handler.threads[i].status = ThreadStatus::Ready;
+                thr.status = ThreadStatus::Ready;
             }
         }
     }
@@ -277,7 +279,7 @@ pub fn run_tick() {
 pub fn get_next_thread_idx() -> usize {
     // Safety:  Read only
     let cs = unsafe { critical_section::acquire() };
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
 
     let new_idx = match handler
         .threads
@@ -309,7 +311,8 @@ fn create_tcb(
 
     let idx = stack.len() - 1;
 
-    let pc: usize = unsafe { core::intrinsics::transmute(handler_fn as *const fn()) };
+    //let pc: usize = unsafe { core::intrinsics::transmute(handler_fn as *const fn()) };
+    let pc: usize = (handler_fn as *const fn()).to_bits();
 
     // Init registers
     stack[idx] = 1 << 24; // xPSR
@@ -348,7 +351,7 @@ fn create_tcb(
 
 fn insert_tcb(tcb: ThreadControlBlock<'static>) -> usize {
     unsafe {
-        let handler = &mut __ALKYN_THREADS_GLOBAL;
+        let handler = &mut ALKYN_THREADS_GLOBAL;
         defmt::trace!("inserting with idx {}", handler.threads.len());
         handler.add_idx += 1;
         handler.threads.push(tcb);
@@ -358,7 +361,7 @@ fn insert_tcb(tcb: ThreadControlBlock<'static>) -> usize {
 
 pub unsafe fn kill_thread(idx: usize) {
     let cs = critical_section::acquire();
-    let handler = &mut __ALKYN_THREADS_GLOBAL;
+    let handler = &mut ALKYN_THREADS_GLOBAL;
     handler.threads.remove(idx);
     handler.add_idx -= 1;
     critical_section::release(cs)
