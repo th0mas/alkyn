@@ -5,7 +5,7 @@ use cortex_m::peripheral::SYST;
 use cortex_m_rt::exception;
 use defmt::{debug, panic};
 
-use super::__ALKYN_THREADS_GLOBAL;
+use super::ALKYN_THREADS_GLOBAL;
 
 static mut __ALKYN_SYST_ENABLE: bool = false;
 
@@ -13,7 +13,7 @@ static mut __ALKYN_SYST_ENABLE: bool = false;
 fn SysTick() {
     defmt::trace!("systick - iv call");
     let cs = unsafe { critical_section::acquire() };
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
     if handler.inited {
         let count = SYST::get_current();
         if count > handler.prev_cnt {
@@ -29,22 +29,20 @@ fn SysTick() {
         multi::send_pendsv();
         critical_section::release(cs)
     }
-    systick_handler();
+    ctxswitch();
 }
 
 #[inline]
-fn systick_handler() {
+fn ctxswitch() {
     let cs = unsafe { critical_section::acquire() };
     let curr_core: usize = processor::get_current_core().into();
 
     // Safety: We're inside our critical section
-    let handler = unsafe { &mut __ALKYN_THREADS_GLOBAL };
+    let handler = unsafe { &mut ALKYN_THREADS_GLOBAL };
     let core_state = &mut handler.cores[curr_core];
     if handler.inited {
-        // TODO: Tick counter broken
 
         if core_state.current == core_state.next {
-            // schedule a thread to be run
 
             defmt::trace!("systick - getting next thr idx");
             core_state.idx = super::get_next_thread_idx();
@@ -56,7 +54,6 @@ fn systick_handler() {
             unsafe {
                 defmt::trace!("systick - setting pendsv");
                 critical_section::release(cs);
-                // Set PendSV bit to pending
                 processor::set_pendsv();
             }
         }
@@ -85,7 +82,7 @@ pub fn enable(syst: &mut SYST, reload: u32) {
     unsafe { critical_section::release(cs) }
 }
 
-pub fn run_systick() {
+pub fn run_ctxswitch() {
     defmt::trace!("systick - manual call");
-    systick_handler()
+    ctxswitch()
 }

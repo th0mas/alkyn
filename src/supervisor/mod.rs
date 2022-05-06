@@ -2,7 +2,8 @@ use core::arch::asm;
 use cortex_m::register;
 use cortex_m_rt::exception;
 
-use crate::{processor, thread};
+use crate::{thread, processor};
+
 
 #[exception]
 fn PendSV() {
@@ -11,7 +12,7 @@ fn PendSV() {
         let current_thread = thread::get_current_thread_ptr();
         let mut psp = register::psp::read();
         defmt::trace!("curr thr: {:#x}", current_thread);
-        if current_thread != 0 {
+        if current_thread > 1 {
             psp = psp - 16;
             asm!(
                 "stmia r0!, {{r4-r7}}",

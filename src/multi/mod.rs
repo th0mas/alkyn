@@ -65,7 +65,7 @@ fn SIO_IRQ_PROC1() {
     sio.fifo.drain();
     match msg {
         MessageType::PendSv => {
-            thread::systick::run_systick();
+            thread::systick::run_ctxswitch();
         }
         _ => defmt::error!("Unknown msg"),
     }

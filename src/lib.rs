@@ -48,7 +48,8 @@ defmt::timestamp!("{=u8}:{=u32:us}", { processor::get_current_core() }, {
     }
 });
 
-pub fn init(mut pac: pac::Peripherals) {
+pub fn init(pac: &mut pac::Peripherals) {
+    info!("alkyn: Initing memory and peripherals");
     // Fix spinlocks
     unsafe {
         const SIO_BASE: u32 = 0xd0000000;
