@@ -1,6 +1,8 @@
 # alkyn
 Embedded Rust OS with a focus on Erlang style message passing.
 
+[![crates.io](https://img.shields.io/crates/v/alkyn.svg)](https://crates.io/crates/alkyn)
+![docs.rs](https://img.shields.io/docsrs/alkyn)
 ---------
 
 Currently a prototype OS to asses the feasability of using Rust.
