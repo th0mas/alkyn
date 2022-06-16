@@ -3,7 +3,6 @@
 #![feature(default_alloc_error_handler)]
 
 use alkyn::{rt::entry, genserver::GenServer};
-use defmt::*;
 use panic_probe as _;
 
 use hal::pac;
@@ -42,19 +41,19 @@ impl GenServer for ExampleGenserver {
 fn main() -> ! {
 
     // Load in peripherals
-    let pac = pac::Peripherals::take().unwrap();
-    let m_pac = cortex_m::Peripherals::take().unwrap();
+    let mut pac = pac::Peripherals::take().unwrap();
+    let mut m_pac = cortex_m::Peripherals::take().unwrap();
 
     // Let alkyn init them, we don't init from within the Kernel
     // so they can be safely used outside
-    alkyn::init(pac);
+    alkyn::init(pac.TIMER, &mut pac.RESETS);
 
     let eg = ExampleGenserver{};
     eg.start(1);
     
 
     // Start the OS
-    alkyn::start(m_pac, 80_000)
+    alkyn::start(&mut m_pac.SYST, 80_000)
 }
 
 // End of file

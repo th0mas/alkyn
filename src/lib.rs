@@ -1,6 +1,16 @@
-//! Blinks the LED on a Pico board
+//! Alkyn kernel for the RP2040 MCU.
 //!
-//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
+//! The Alkyn kernel is a small prototype Kernel exploring the usability
+//! of Erlang-style message passing in microcontroller kernels.
+//!
+//! It should not, as of June 2022, be considered production ready.
+//!
+//! # Minimum supported Rust version
+//! Nightly, as new as you can get; I've done some terrible things
+//!
+//! # Safety
+//! Horrendous.
+
 #![no_std]
 #![feature(core_intrinsics)]
 #![feature(asm_const)]
@@ -12,6 +22,8 @@
 #![feature(ptr_to_from_bits)]
 
 pub use cortex_m_rt as rt;
+pub use defmt;
+
 use defmt::info;
 use hal::pac;
 use panic_probe as _;
@@ -20,12 +32,11 @@ use rp2040_hal as hal;
 pub mod genserver;
 pub mod heap;
 pub mod logger;
-pub mod multi;
+pub(crate) mod multi;
 pub mod processor;
-pub mod supervisor;
+pub(crate) mod supervisor;
 pub mod sync;
 pub mod thread;
-pub mod timer;
 
 // Setup allocator
 use core::mem::MaybeUninit;
@@ -48,7 +59,20 @@ defmt::timestamp!("{=u8}:{=u32:us}", { processor::get_current_core() }, {
     }
 });
 
-pub fn init(pac: &mut pac::Peripherals) {
+/// Initialize the kernel.
+/// 
+/// This MUST be done before using any kernel methods, as they might rely
+/// on data structures initualised by this function. 
+/// 
+/// Wipes Spinlocks and creates a heap.
+/// 
+/// # Example
+/// ```
+/// let mut pac = pac::Peripherals::take().unwrap();
+/// let mut m_pac = cortex_m::Peripherals::take().unwrap();
+/// alkyn::init(pac.TIMER, &mut pac.RESETS);
+/// ```
+pub fn init(timer: pac::TIMER, resets: &mut pac::RESETS) {
     info!("alkyn: Initing memory and peripherals");
     // Fix spinlocks
     unsafe {
@@ -60,16 +84,21 @@ pub fn init(pac: &mut pac::Peripherals) {
         }
     }
     info!("alkyn: Initing memory and peripherals");
-    
+
     static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
     unsafe {
         ALLOCATOR.init((&mut HEAP).as_ptr() as usize, HEAP_SIZE);
-        TIMER = Some(hal::Timer::new(pac.TIMER, &mut pac.RESETS));
+        TIMER = Some(hal::Timer::new(timer, resets));
     }
     info!("alkyn: Heap initialized!");
 }
 
-pub fn start(mut cortex_pac: cortex_m::Peripherals, ticks: u32) -> ! {
+/// Starts the Kernel and associated threads.
+/// 
+/// Should be called last.
+/// # Important
+/// DOES NOT RETURN
+pub fn start(systick: &mut cortex_m::peripheral::SYST, ticks: u32) -> ! {
     info!("alkyn: Starting");
-    thread::init(&mut cortex_pac.SYST, ticks)
+    thread::init(systick, ticks)
 }

@@ -1,9 +1,8 @@
 use crate::{multi, processor};
-use core::ptr;
 use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m::peripheral::SYST;
 use cortex_m_rt::exception;
-use defmt::{debug, panic};
+use defmt::panic;
 
 use super::ALKYN_THREADS_GLOBAL;
 

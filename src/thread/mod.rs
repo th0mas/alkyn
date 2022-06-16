@@ -1,9 +1,11 @@
-use core::{marker::PhantomData, ptr, borrow::BorrowMut};
-use cortex_m::{asm, peripheral::SYST};
+//! Use threads and message passing
+
+use core::{marker::PhantomData};
+use cortex_m::{peripheral::SYST};
 use defmt::error;
 
 extern crate alloc;
-use alloc::vec::{self, Vec};
+use alloc::vec::Vec;
 
 use crate::processor;
 pub mod msg;
@@ -39,7 +41,6 @@ enum ThreadStatus {
     Ready,
     Sleeping,
     MailPending, //
-    MailRecv,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -163,7 +164,7 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
     unsafe {
         let cs = critical_section::acquire();
         let ptr: usize = core::intrinsics::transmute(&ALKYN_THREADS_GLOBAL);
-        &ALKYN_THREADS_GLOBAL.threads.reserve_exact(MAX_THREADS);
+        let _ = &ALKYN_THREADS_GLOBAL.threads.reserve_exact(MAX_THREADS);
         __ALKYN_THREADS_GLOBAL_PTR = ptr as u32;
         defmt::trace!("Creating idle threads");
         create_idle_thr(Core::Core0, 0);
@@ -183,7 +184,7 @@ pub fn init(syst: &mut SYST, ticks: u32) -> ! {
 ///
 /// Unsafe as this should only be called once per core, and no guards
 /// to make sure you don't do it twice
-unsafe fn create_idle_thr(core: Core, idx: usize) {
+unsafe fn create_idle_thr(core: Core, _idx: usize) {
     static mut idle_stack: [u32; 64] = [0xDEADBEEF; 64];
     match create_tcb(
         &mut idle_stack,

@@ -1,13 +1,14 @@
+//! Multicore support 
+
 use core::sync::atomic;
 use defmt::info;
-use hal::multicore::{Multicore, Stack};
 use hal::pac::{interrupt, Interrupt, NVIC};
 use hal::{pac, Sio};
 use rp2040_hal as hal;
 
 mod init;
+use init::Stack;
 
-use crate::processor;
 use crate::thread;
 
 #[repr(u32)]
@@ -61,13 +62,12 @@ fn SIO_IRQ_PROC1() {
     let mut sio = Sio::new(pac.SIO);
 
     // Safety: We know u32 is the enum type
-    let msg: MessageType = unsafe { core::mem::transmute((sio.fifo.read_blocking())) };
+    let msg: MessageType = unsafe { core::mem::transmute(sio.fifo.read_blocking()) };
     sio.fifo.drain();
     match msg {
         MessageType::PendSv => {
             thread::systick::run_ctxswitch();
         }
-        _ => defmt::error!("Unknown msg"),
     }
 
     sio.fifo.write(1);

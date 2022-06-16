@@ -59,34 +59,36 @@ static MULTICORE_TRAMPOLINE: [u16; 2] = [
     0x46c0, // nop - pad this out to 32 bits long
 ];
 
+
+// TODO: Need to figure out how to properly stack guard this.
+// #[inline(always)]
+// fn install_stack_guard(stack_bottom: *mut usize) {
+//     let core = unsafe { pac::CorePeripherals::steal() };
+
+//     // Trap if MPU is already configured
+//     if core.MPU.ctrl.read() != 0 {
+//         cortex_m::asm::udf();
+//     }
+
+//     // The minimum we can protect is 32 bytes on a 32 byte boundary, so round up which will
+//     // just shorten the valid stack range a tad.
+//     let addr = (stack_bottom as u32 + 31) & !31;
+//     // Mask is 1 bit per 32 bytes of the 256 byte range... clear the bit for the segment we want
+//     let subregion_select = 0xff ^ (1 << ((addr >> 5) & 7));
+//     unsafe {
+//         core.MPU.ctrl.write(5); // enable mpu with background default map
+//         core.MPU.rbar.write((addr & !0xff) | 0x8);
+//         core.MPU.rasr.write(
+//             1 // enable region
+//                | (0x7 << 1) // size 2^(7 + 1) = 256
+//                | (subregion_select << 8)
+//                | 0x10000000, // XN = disable instruction fetch; no other bits means no permissions
+//         );
+//     }
+// }
+
 #[inline(always)]
-fn install_stack_guard(stack_bottom: *mut usize) {
-    let core = unsafe { pac::CorePeripherals::steal() };
-
-    // Trap if MPU is already configured
-    if core.MPU.ctrl.read() != 0 {
-        cortex_m::asm::udf();
-    }
-
-    // The minimum we can protect is 32 bytes on a 32 byte boundary, so round up which will
-    // just shorten the valid stack range a tad.
-    let addr = (stack_bottom as u32 + 31) & !31;
-    // Mask is 1 bit per 32 bytes of the 256 byte range... clear the bit for the segment we want
-    let subregion_select = 0xff ^ (1 << ((addr >> 5) & 7));
-    unsafe {
-        core.MPU.ctrl.write(5); // enable mpu with background default map
-        core.MPU.rbar.write((addr & !0xff) | 0x8);
-        core.MPU.rasr.write(
-            1 // enable region
-               | (0x7 << 1) // size 2^(7 + 1) = 256
-               | (subregion_select << 8)
-               | 0x10000000, // XN = disable instruction fetch; no other bits means no permissions
-        );
-    }
-}
-
-#[inline(always)]
-fn core1_setup(stack_bottom: *mut usize) {
+fn core1_setup(_stack_bottom: *mut usize) {
     // install_stack_guard(stack_bottom);
     // TODO: irq priorities
 }
@@ -135,13 +137,6 @@ pub struct Core<'p> {
 }
 
 impl<'p> Core<'p> {
-    /// Get the id of this core.
-    pub fn id(&self) -> u8 {
-        match self.inner {
-            None => 0,
-            Some(..) => 1,
-        }
-    }
 
     fn inner_spawn(
         &mut self,

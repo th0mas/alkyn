@@ -29,7 +29,7 @@ fn PendSV() {
         }
         let next = thread::get_next_thread_ptr();
         defmt::trace!("nxt thr: {:#x}", next);
-        let kernel = &mut thread::__ALKYN_THREADS_GLOBAL;
+        let kernel = &mut thread::ALKYN_THREADS_GLOBAL;
         kernel.set_next_to_curr();
         defmt::trace!("switching ctx");
         asm!(

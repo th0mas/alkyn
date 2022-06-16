@@ -2,12 +2,11 @@
 //! Based off cortex-m-alloc, adapted to use rp2040 spinlocks
 
 use core::alloc::{GlobalAlloc, Layout};
-use core::borrow::BorrowMut;
 use core::cell::RefCell;
 use core::ptr::{self, NonNull};
 use linked_list_allocator::Heap;
 
-use crate::sync::{self, Mutex, Spinlock};
+use crate::sync::{Mutex, Spinlock};
 
 pub struct AlkynHeap {
     heap: Mutex<RefCell<Heap>>,

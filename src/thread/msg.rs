@@ -4,9 +4,8 @@ use core::any::{Any, TypeId};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use defmt::Format;
 
-use crate::{processor, sync, thread};
+use crate::thread;
 
 // Init needed for static allocation
 const INIT: Vec<RawMessage> = Vec::new();
@@ -16,7 +15,6 @@ static mut ALKYN_MAILBOX: [Vec<RawMessage>; super::MAX_THREADS] = [INIT; super::
 
 #[derive(Clone, Copy)]
 pub struct RawMessage {
-    idx: usize,
     msg: *mut dyn Any,
 }
 
@@ -42,7 +40,6 @@ where
         unsafe {
             let cs = critical_section::acquire();
             ALKYN_MAILBOX[idx].push(RawMessage {
-                idx: idx,
                 msg: Box::into_raw(b),
             });
 

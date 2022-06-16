@@ -1,4 +1,6 @@
-// Abstract out some unsafe assembly
+//! Access to useful CPU functions.
+//! 
+//! Mostly just wrappers around pre-existing ASM instructions.
 use crate::pac;
 use core::ptr;
 use cortex_m::{asm, interrupt};

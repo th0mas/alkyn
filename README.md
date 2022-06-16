@@ -13,6 +13,12 @@ Alkyn requires:
 * A [probe-run](https://github.com/knurling-rs/probe-run) compatible debug probe
 * An RP2040 based device
 
+Alkyn's examples also use `flip-link` as the linker, which should be installed as follows:
+```
+cargo install flip-link
+```
+Alkyn should work without this in your own projects, but its use is recommened.
+
 ## Examples
 Examples are in the `/examples` directory and can be run on an RP2040
 device by running:

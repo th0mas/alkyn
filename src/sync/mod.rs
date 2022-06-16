@@ -1,4 +1,6 @@
-use core::sync::atomic::{AtomicU32, Ordering};
+//! Methods to syncronise across cores safely.
+
+use core::sync::atomic::{Ordering};
 
 use crate::hal;
 use crate::{pac, processor};
@@ -26,13 +28,6 @@ const LOCK_UNOWNED: u8 = 0b0000;
 /// Marker to show the lock is allocated
 const LOCK_ALLOC: u8 = 0b0100;
 
-/// Marker value to indicate that we already owned the lock when we started the `critical_section`.
-///
-/// Since we can't take the spinlock when we already have it, we need some other way to keep track of `critical_section` ownership.
-/// `critical_section` provides a token for communicating between `acquire` and `release` so we use that.
-/// If we're the outermost call to `critical_section` we use the values 0 and 1 to indicate we should release the spinlock and set the interrupts back to disabled and enabled, respectively.
-/// The value 2 indicates that we aren't the outermost call, and should not release the spinlock or re-enable interrupts in `release`
-const LOCK_ALREADY_OWNED: u8 = 0b1000;
 
 /// We "only" have 30 spinlocks availiable as some are used by the HAL.
 /// Indicates which core owns the lock so that we can call critical_section recursively.

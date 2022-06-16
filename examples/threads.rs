@@ -24,12 +24,12 @@ pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 fn main() -> ! {
 
     // Load in peripherals
-    let pac = pac::Peripherals::take().unwrap();
-    let m_pac = cortex_m::Peripherals::take().unwrap();
+    let mut pac = pac::Peripherals::take().unwrap();
+    let mut m_pac = cortex_m::Peripherals::take().unwrap();
 
     // Let alkyn init them, we don't init from within the Kernel
     // so they can be safely used outside
-    alkyn::init(pac);
+    alkyn::init(pac.TIMER, &mut pac.RESETS);
 
 
     // Create the Stacks for our processes.
@@ -75,7 +75,7 @@ fn main() -> ! {
     );
 
     // Start the OS
-    alkyn::start(m_pac, 80_000)
+    alkyn::start(&mut m_pac.SYST, 80_000)
 }
 
 // End of file
